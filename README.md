@@ -3,7 +3,7 @@
 Batch tool for ads playables: fetches app name + icon from Google Play / App Store, renames and exports a ZIP.
 Works on Windows, macOS and Linux in any Chromium browser (Chrome, Edge, Brave). No Python, no exe.
 
-## Cài đặt (dành cho UA)
+## Cài đặt
 
 1. Tải `ads-tool-extension.zip` từ trang **Releases** rồi giải nén ra một thư mục (đừng xoá thư mục này sau khi cài).
 2. Mở `chrome://extensions` (Edge: `edge://extensions`).
