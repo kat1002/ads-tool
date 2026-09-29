@@ -1,0 +1,26 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip extension
+        run: zip -r ads-tool-extension.zip manifest.json background.js ads-tool.html ads-tool.js jszip.min.js icons
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ads-tool-extension
+          path: ads-tool-extension.zip
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ads-tool-extension.zip

@@ -1,0 +1,340 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ads Tool — Batch + Store Fetch</title>
+  <script src="jszip.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --surface-2: #eef1f5;
+      --border: #d3d9e2;
+      --text: #1b2430;
+      --muted: #556170;
+      --accent: #1d4ed8;
+      --accent-fg: #1d4ed8;
+      --accent-text: #ffffff;
+      --accent-soft: #e4ebff;
+      --ok: #166534;
+      --ok-soft: #e0f3e6;
+      --warn: #92400e;
+      --warn-soft: #fcefd6;
+      --err: #b91c1c;
+      --err-soft: #fce6e6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0e1319;
+        --surface: #161c24;
+        --surface-2: #1e2731;
+        --border: #2d3846;
+        --text: #e7ebf1;
+        --muted: #a3afbf;
+        --accent: #3b6fe0;
+        --accent-fg: #9dbcff;
+        --accent-soft: #1b2a4a;
+        --ok: #7dd8a0;
+        --ok-soft: #14301f;
+        --warn: #f3c26b;
+        --warn-soft: #3a2c10;
+        --err: #ff9b9b;
+        --err-soft: #3d1717;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; font-size: 14px; line-height: 1.5; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .wrap { width: min(1180px, calc(100vw - 32px)); margin: 20px auto 32px; }
+    .hidden { display: none !important; }
+    code { background: var(--surface-2); padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; margin-bottom: 16px; }
+    .topbar h1 { margin: 0; font-size: 22px; }
+    .topbar p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+    .steps { display: grid; gap: 12px; min-width: 0; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; min-width: 0; }
+    .panel h2 { margin: 0 0 4px; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+    .panel h2 .grow { flex: 1; }
+    .step-no { display: inline-grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); font-size: 12px; font-weight: 700; }
+    .step-no.done { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+    .step-help { margin: 0 0 12px 34px; color: var(--muted); font-size: 13px; }
+    .count { color: var(--muted); font-weight: 400; font-size: 13px; }
+    label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    .hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+    .hint.warn { color: var(--warn); }
+
+    input[type="text"], textarea {
+      width: 100%; padding: 9px 12px; min-height: 40px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font: inherit; font-size: 13px;
+    }
+    input[type="text"]::placeholder, textarea::placeholder { color: var(--muted); opacity: 0.8; }
+    input[type="text"]:hover, textarea:hover { border-color: var(--muted); }
+
+    button {
+      appearance: none; min-height: 40px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    button:hover:not(:disabled) { background: var(--surface-2); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.12); }
+    button.danger { color: var(--err); }
+    button.danger:hover:not(:disabled) { background: var(--err-soft); }
+    button.small { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    @media (pointer: coarse) { button, input[type="text"] { min-height: 44px; } button.small { min-height: 40px; } }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+    .chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; font-weight: 500; margin: 0; cursor: pointer; }
+    .chip input { margin: 0; }
+    .options { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .options .sep { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+
+    /* step 1 */
+    .drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 22px 16px; text-align: center; color: var(--muted); cursor: pointer; background: var(--surface-2); font-size: 13px; }
+    .drop-zone strong { color: var(--text); }
+    .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+    .meta-box { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+    .meta { color: var(--muted); font-size: 12px; }
+    .source-list { display: grid; gap: 4px; margin-top: 6px; }
+    .source-line { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+    .source-line span:first-child { word-break: break-all; }
+    .source-line span:last-child { color: var(--muted); white-space: nowrap; }
+
+    /* step 2: two-part store field */
+    .pair-field { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+    .pair-half { flex: 1 1 220px; min-width: 0; }
+    .pair-field button { flex: none; }
+
+    /* chips + badges (no color-only meaning: always carry text) */
+    .chip-link { display: inline-block; max-width: 100%; padding: 2px 9px; border-radius: 6px; font-size: 12px; text-decoration: none; word-break: break-all; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+    .chip-link.play { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+    .chip-link.ios { border-color: var(--accent); color: var(--accent-fg); background: var(--accent-soft); }
+    .chip-link.bad { border-color: var(--err); color: var(--err); background: var(--err-soft); }
+    .chip-link:hover { filter: brightness(0.95); text-decoration: underline; }
+    .dash { color: var(--muted); }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+    .badge.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+    .badge.err { background: var(--err-soft); color: var(--err); border-color: var(--err); }
+    .badge.loading { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+    .badge.manual { background: var(--accent-soft); color: var(--accent-fg); border-color: var(--accent); }
+
+    /* step 3 */
+    .variant-list { display: grid; gap: 10px; }
+    .variant-card { padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+    .v-head { display: flex; align-items: center; gap: 12px; }
+    .icon-preview { flex: none; width: 56px; height: 56px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); object-fit: cover; cursor: pointer; }
+    .icon-preview:not([src]) { visibility: hidden; }
+    .v-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
+    .v-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+    .v-title strong { word-break: break-word; }
+    .v-num { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .v-out { font-size: 12px; color: var(--muted); word-break: break-all; }
+    .v-out b { color: var(--text); font-weight: 600; }
+    .v-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .v-actions { display: flex; gap: 6px; flex: none; }
+    details.v-edit { margin-top: 10px; }
+    details.v-edit > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--accent-fg); user-select: none; }
+    .variant-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+    .variant-grid .full { grid-column: 1 / -1; }
+    .fetch-status { font-size: 12px; color: var(--muted); }
+    .fetch-status.err { color: var(--err); }
+    .fetch-status.ok { color: var(--ok); }
+    .file-name { color: var(--muted); font-size: 12px; }
+    .empty-state { padding: 18px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); text-align: center; font-size: 13px; }
+
+    /* sticky action bar */
+    .action-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12); }
+    .action-bar .summary { flex: 1; min-width: 200px; }
+    .action-bar .summary b { display: block; font-size: 13px; }
+    .action-bar .summary span { display: block; font-size: 12px; color: var(--muted); }
+    .msg { flex-basis: 100%; padding: 8px 12px; border-radius: 8px; font-size: 12px; background: var(--accent-soft); color: var(--text); border: 1px solid var(--accent); }
+    .msg.err { background: var(--err-soft); border-color: var(--err); color: var(--err); }
+    .msg.warn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+    .msg.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+
+    /* result panel */
+    .result-panel { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+    .result-panel h2 { margin-bottom: 12px; }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .stat { padding: 10px; border-radius: 8px; background: var(--surface-2); }
+    .stat .num { font-size: 22px; font-weight: 700; }
+    .stat .label { font-size: 11px; color: var(--muted); }
+    .progress { height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+    .progress > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s ease; }
+    .progress-text { margin: 6px 0 12px; font-size: 12px; color: var(--muted); min-height: 18px; }
+    .output-list { display: grid; gap: 8px; margin-bottom: 12px; }
+    .output-empty { padding: 12px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); font-size: 13px; }
+    .output-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+    .output-item strong { display: block; word-break: break-all; font-size: 12px; }
+    .output-meta { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    details.log-box > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); user-select: none; margin-bottom: 8px; }
+    .log { height: 200px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); padding: 10px; overflow: auto; white-space: pre-wrap; font-family: Consolas, Monaco, monospace; font-size: 11px; }
+
+    /* popup */
+    dialog { padding: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); width: min(940px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+    dialog[open] { display: flex; flex-direction: column; }
+    dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+    .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .modal-head h3 { margin: 0; font-size: 16px; }
+    .modal-head p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+    .modal-body { padding: 16px 20px; overflow: auto; }
+    .modal-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); }
+    .modal-foot .grow { flex: 1; font-size: 12px; color: var(--muted); }
+    #bulkText { min-height: 200px; resize: vertical; font-family: Consolas, Monaco, monospace; font-size: 12px; white-space: pre; overflow: auto; }
+    .check-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table.check-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 12px; }
+    .check-table th { position: sticky; top: 0; background: var(--surface-2); text-align: left; color: var(--muted); font-weight: 600; padding: 8px 10px; }
+    .check-table td { padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: middle; }
+    .check-table td.n { color: var(--muted); width: 32px; }
+    .name-input { min-width: 170px; }
+    .edit-input { min-width: 210px; font-size: 12px; }
+    .row-actions { display: flex; gap: 6px; flex-wrap: nowrap; }
+    .check-table { table-layout: auto; }
+    .err-text { color: var(--err); font-size: 12px; margin-top: 4px; }
+    .muted { color: var(--muted); }
+    .art { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--border); object-fit: cover; display: block; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .result-panel { position: static; max-height: none; }
+      .variant-grid { grid-template-columns: 1fr; }
+      .v-head { align-items: flex-start; }
+    }
+    @media (prefers-reduced-motion: reduce) { .progress > div { transition: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <div>
+        <h1>Ads Tool</h1>
+        <p>Làm theo 4 bước: chọn file → thêm link store → kiểm tra variant → xử lý và tải về.</p>
+      </div>
+    </header>
+
+    <div class="layout">
+      <main class="steps">
+        <section class="panel">
+          <h2><span id="stepNo1" class="step-no">1</span> Chọn file nguồn</h2>
+          <p class="step-help">File playable gốc (.zip hoặc .html). Chọn nhiều file thì mỗi file được nhân với từng variant.</p>
+          <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Chọn file nguồn">
+            <div><strong>Kéo thả file vào đây</strong> hoặc bấm để chọn</div>
+          </div>
+          <input id="fileInput" class="hidden" type="file" accept=".html,.htm,.zip" multiple aria-label="Chọn file nguồn">
+          <div id="fileMeta" class="meta-box"><div class="meta">Chưa chọn file.</div></div>
+        </section>
+
+        <section class="panel">
+          <h2><span id="stepNo2" class="step-no">2</span> Thêm link store</h2>
+          <p class="step-help">Nhập link Google Play và/hoặc App Store của app. Tool tự lấy tên app và icon 512×512. Cần thêm nhiều app: bấm “Thêm” rồi dán cả danh sách.</p>
+          <div class="pair-field">
+            <div class="pair-half">
+              <label for="quickPlay">Link Google Play</label>
+              <input id="quickPlay" type="text" placeholder="https://play.google.com/store/apps/details?id=..." autocomplete="off" spellcheck="false">
+            </div>
+            <div class="pair-half">
+              <label for="quickIos">Link App Store</label>
+              <input id="quickIos" type="text" placeholder="https://apps.apple.com/us/app/...id123456789" autocomplete="off" spellcheck="false">
+            </div>
+            <button id="openAddBtn" class="primary" type="button">Thêm</button>
+          </div>
+          <p class="hint">Bấm “Thêm” → dán danh sách link → “Tiếp theo” → kiểm tra tên/icon → “Xác nhận”. Mỗi app sẽ thành một variant ở bước 3.</p>
+        </section>
+
+        <section class="panel">
+          <h2><span id="stepNo3" class="step-no">3</span> Kiểm tra variant <span id="variantCount" class="count"></span><span class="grow"></span><button id="addVariantBtn" class="small" type="button">Thêm variant trống</button></h2>
+          <p class="step-help">Mỗi variant sẽ tạo ra một file output. Bấm “Chỉnh sửa” trên variant để đổi tên, link hoặc icon.</p>
+          <div id="variantList" class="variant-list"></div>
+          <div id="variantEmpty" class="empty-state hidden">Chưa có variant. Làm bước 2 để thêm từ link store, hoặc bấm “Thêm variant trống” để nhập tay.</div>
+          <p class="hint">Để trống “Tên output” thì file được đặt tên <code>{tên nguồn}_{tên app}.zip</code>. Có thể dùng <code>{base}</code> <code>{app}</code> <code>{index}</code> <code>{next}</code> <code>{ext}</code>.</p>
+        </section>
+
+        <section class="panel">
+          <h2><span class="step-no">4</span> Tuỳ chọn xử lý</h2>
+          <p class="step-help">Mặc định là đủ dùng, chỉ đổi khi cần.</p>
+          <div class="options">
+            <label class="chip"><input type="radio" name="mode" value="re-store" checked> Thay thế link / icon cũ</label>
+            <label class="chip"><input type="radio" name="mode" value="add"> Chỉ thêm nếu chưa có</label>
+            <span class="sep"></span>
+            <label class="chip"><input id="networkRenameCheckbox" type="checkbox" checked> Đổi tên file theo network (GGA_, Minter_...)</label>
+            <label class="chip"><input id="innerRenameCheckbox" type="checkbox"> Đổi tên file bên trong theo tên output</label>
+            <label class="chip"><input id="autoDownloadCheckbox" type="checkbox" checked> Tự tải sau khi xử lý</label>
+          </div>
+        </section>
+
+        <div class="action-bar">
+          <div class="summary"><b id="summary">Chưa có nguồn.</b><span id="nextHint"></span></div>
+          <button id="processBtn" class="primary" type="button" disabled>Xử lý</button>
+          <button id="downloadOutputBtn" type="button" disabled>Tải tất cả</button>
+          <button id="downloadReportBtn" type="button" disabled>Tải report</button>
+          <div id="msg" class="msg hidden" role="status"></div>
+        </div>
+      </main>
+
+      <aside class="panel result-panel">
+        <h2>Kết quả</h2>
+        <div class="stats">
+          <div class="stat"><div id="statOutputs" class="num">0</div><div class="label">Output</div></div>
+          <div class="stat"><div id="statHtml" class="num">0</div><div class="label">HTML đã sửa</div></div>
+          <div class="stat"><div id="statFail" class="num">0</div><div class="label">Lỗi</div></div>
+        </div>
+        <div class="progress"><div id="progressBar"></div></div>
+        <div id="progressText" class="progress-text"></div>
+        <div id="outputList" class="output-list"><div class="output-empty">Chưa có output. Sau khi bấm Xử lý, file sẽ hiện ở đây.</div></div>
+        <details id="logDetails" class="log-box">
+          <summary>Log chi tiết</summary>
+          <div id="log" class="log">Sẵn sàng.</div>
+        </details>
+      </aside>
+    </div>
+  </div>
+
+  <dialog id="addModal" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <div>
+        <h3 id="modalTitle">Thêm link store</h3>
+        <p id="modalStep">Bước 1/2 · Nhập danh sách</p>
+      </div>
+      <button id="closeModalBtn" class="small" type="button" aria-label="Đóng hộp thoại">Đóng</button>
+    </div>
+
+    <div id="stageInput">
+      <div class="modal-body">
+        <label for="bulkText">Dán danh sách link</label>
+        <textarea id="bulkText" wrap="off" spellcheck="false" placeholder="https://play.google.com/store/apps/details?id=com.example.one   https://apps.apple.com/us/app/example/id123456789&#10;https://play.google.com/store/apps/details?id=com.example.two&#10;https://apps.apple.com/us/app/example-three/id987654321"></textarea>
+        <p class="hint">Mỗi dòng là một app. Trên một dòng có thể có link Google Play, link App Store hoặc cả hai (cách nhau bằng dấu cách, tab hoặc dấu |). Copy 2 cột từ Excel/Sheets cũng dán được. Tham số tracking trong link sẽ tự bị bỏ.</p>
+        <p id="bulkHint" class="hint warn hidden"></p>
+      </div>
+      <div class="modal-foot">
+        <button id="cancelBtn" type="button">Huỷ</button>
+        <button id="nextBtn" class="primary" type="button">Tiếp theo</button>
+      </div>
+    </div>
+
+    <div id="stageCheck" class="hidden">
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0">Kiểm tra tên và icon lấy về. Sửa tên nếu cần. Bấm “Sửa” để đổi hoặc thêm link (Google Play được ưu tiên lấy trước, App Store là dự phòng), rồi “Lấy lại” để cập nhật tên và icon. Xoá dòng không muốn thêm, sau đó bấm “Xác nhận”.</p>
+        <p id="checkNotice" class="hint warn hidden"></p>
+        <div class="check-wrap" style="margin-top:10px">
+          <table class="check-table">
+            <thead><tr><th>#</th><th>Tên</th><th>Google Play</th><th>App Store</th><th>SplashArt</th><th>Hành động</th></tr></thead>
+            <tbody id="checkBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span id="checkSummary" class="grow"></span>
+        <button id="backBtn" type="button">Quay lại</button>
+        <button id="confirmBtn" class="primary" type="button" disabled>Xác nhận</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="ads-tool.js"></script>
+</body>
+</html>
