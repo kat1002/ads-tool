@@ -1,3 +1,7 @@
+.buildenv/
+build/
+dist/
+__pycache__/
+*.exe
 *.zip
-.DS_Store
-node_modules/
+*.spec
