@@ -71,6 +71,15 @@
         notesToast: $("notesToast"),
         notesImportFile: $("notesImportFile"),
         notesCloseBtn: $("notesCloseBtn"),
+        noteBulkBtn: $("noteBulkBtn"),
+        noteBulkModal: $("noteBulkModal"),
+        noteBulkClose: $("noteBulkClose"),
+        noteBulkCat: $("noteBulkCat"),
+        noteBulkText: $("noteBulkText"),
+        noteBulkStatus: $("noteBulkStatus"),
+        noteBulkErrors: $("noteBulkErrors"),
+        noteBulkCancel: $("noteBulkCancel"),
+        noteBulkSave: $("noteBulkSave"),
         notePickBtn: $("notePickBtn"),
         notePicker: $("notePicker"),
         notePickAll: $("notePickAll"),
@@ -524,6 +533,7 @@
           { label: "Đổi tên danh mục…", action: "rename-cat" },
           { label: "Xoá danh mục", action: "delete-cat", danger: true },
           { sep: true },
+          { label: "Thêm nhiều link…", action: "bulk-add" },
           { label: "Xuất .txt", action: "export" },
           { label: "Nhập .txt…", action: "import" }
         ];
@@ -552,6 +562,7 @@
           else if (action === "delete") removeNote(context.id);
         } else if (action === "rename-cat") renameCategory();
         else if (action === "delete-cat") deleteCategory();
+        else if (action === "bulk-add") openBulkNotes();
         else if (action === "export") exportNotes();
         else if (action === "import") elements.notesImportFile.click();
       }
@@ -636,6 +647,101 @@
         elements.noteUrl.value = "";
         elements.noteUrl.focus();
         notesFeedback(existing ? "Link đã có, đã đưa lên đầu." : "Đã lưu link.", "ok");
+      }
+
+      // ---- bulk add dialog ----
+      function parseBulkNotes(text, cat) {
+        const seen = new Set(cat.links.map((item) => storeKey(item.url) || item.url));
+        const result = { items: [], duplicates: 0, invalid: [] };
+        String(text || "").split(/\r?\n/).forEach((line, index) => {
+          if (!line.trim()) return;
+          const tokens = line.split(/[\t|]+|\s+/).filter(Boolean);
+          let url = null;
+          let urlIndex = -1;
+          for (let i = 0; i < tokens.length; i += 1) {
+            url = normalizeNoteUrl(tokens[i]);
+            if (url) {
+              urlIndex = i;
+              break;
+            }
+          }
+          if (!url) {
+            result.invalid.push({ line: index + 1, text: line.trim() });
+            return;
+          }
+          const key = storeKey(url) || url;
+          if (seen.has(key)) {
+            result.duplicates += 1;
+            return;
+          }
+          seen.add(key);
+          const note = tokens.filter((_, i) => i !== urlIndex).join(" ").replace(/\s+/g, " ").trim().slice(0, 200);
+          result.items.push({ url, note });
+        });
+        return result;
+      }
+
+      function bulkTargetCat() {
+        return notesState.categories.find((cat) => cat.id === elements.noteBulkCat.value) || activeCat();
+      }
+
+      let bulkPrevCatId = "";
+
+      function renderBulkCatOptions(selectedId) {
+        const wanted = selectedId || elements.noteBulkCat.value;
+        const id = notesState.categories.some((cat) => cat.id === wanted) ? wanted : activeCat().id;
+        elements.noteBulkCat.innerHTML = notesState.categories.map((item) =>
+          `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} (${item.links.length})</option>`
+        ).join("") + `<option value="${NEW_CAT_VALUE}">+ Danh mục mới…</option>`;
+        elements.noteBulkCat.value = id;
+        bulkPrevCatId = id;
+      }
+
+      function updateBulkPreview() {
+        const parsed = parseBulkNotes(elements.noteBulkText.value, bulkTargetCat());
+        const count = parsed.items.length;
+        elements.noteBulkStatus.textContent = `${count} link hợp lệ · ${parsed.duplicates} trùng · ${parsed.invalid.length} lỗi`;
+        elements.noteBulkErrors.textContent = "";
+        parsed.invalid.slice(0, 5).forEach((bad) => {
+          const div = document.createElement("div");
+          div.textContent = `Dòng ${bad.line}: ${bad.text.length > 60 ? `${bad.text.slice(0, 60)}…` : bad.text}`;
+          elements.noteBulkErrors.appendChild(div);
+        });
+        if (parsed.invalid.length > 5) {
+          const more = document.createElement("div");
+          more.textContent = `… và ${parsed.invalid.length - 5} dòng lỗi khác`;
+          elements.noteBulkErrors.appendChild(more);
+        }
+        elements.noteBulkErrors.classList.toggle("hidden", !parsed.invalid.length);
+        elements.noteBulkSave.textContent = count ? `Lưu ${count} link` : "Lưu";
+        elements.noteBulkSave.disabled = !count;
+        return parsed;
+      }
+
+      function openBulkNotes() {
+        closeNotesMenu();
+        renderBulkCatOptions(notesState.activeId);
+        elements.noteBulkText.value = "";
+        updateBulkPreview();
+        if (!elements.noteBulkModal.open) elements.noteBulkModal.showModal();
+        elements.noteBulkText.focus();
+      }
+
+      function saveBulkNotes() {
+        const cat = bulkTargetCat();
+        const parsed = parseBulkNotes(elements.noteBulkText.value, cat);
+        if (!parsed.items.length) return;
+        const before = snapshotCategories();
+        const beforeActive = notesState.activeId;
+        const now = Date.now();
+        const fresh = parsed.items.map((item) => ({ id: newId(), url: item.url, note: item.note, createdAt: now }));
+        cat.links = fresh.concat(cat.links);
+        notesState.activeId = cat.id;
+        saveNotes();
+        renderNotes();
+        elements.noteBulkModal.close();
+        const extra = parsed.duplicates || parsed.invalid.length ? ` (bỏ qua ${parsed.duplicates} trùng, ${parsed.invalid.length} lỗi)` : "";
+        notesFeedback(`Đã thêm ${fresh.length} link vào "${cat.name}"${extra}.`, "ok", () => restoreCategories(before, beforeActive));
       }
 
       function findLink(id) {
@@ -3423,6 +3529,38 @@
         addNote();
       });
       elements.noteUrl.addEventListener("input", () => elements.noteUrl.removeAttribute("aria-invalid"));
+      elements.noteBulkBtn.addEventListener("click", openBulkNotes);
+      elements.noteBulkClose.addEventListener("click", () => elements.noteBulkModal.close());
+      elements.noteBulkCancel.addEventListener("click", () => elements.noteBulkModal.close());
+      elements.noteBulkModal.addEventListener("close", () => {
+        if (notesState.open) elements.noteBulkBtn.focus();
+      });
+      elements.noteBulkText.addEventListener("input", updateBulkPreview);
+      elements.noteBulkText.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          saveBulkNotes();
+        }
+      });
+      elements.noteBulkSave.addEventListener("click", saveBulkNotes);
+      elements.noteBulkCat.addEventListener("change", () => {
+        const value = elements.noteBulkCat.value;
+        if (value === NEW_CAT_VALUE) {
+          const name = askCategoryName("Tên danh mục mới (ví dụ tên game hoặc thể loại):", "");
+          if (!name) {
+            elements.noteBulkCat.value = bulkPrevCatId;
+            return;
+          }
+          const cat = makeCategory(name);
+          notesState.categories.push(cat);
+          saveNotes();
+          renderNotes();
+          renderBulkCatOptions(cat.id);
+        } else {
+          bulkPrevCatId = value;
+        }
+        updateBulkPreview();
+      });
       elements.notesCatSelect.addEventListener("change", () => {
         const value = elements.notesCatSelect.value;
         if (value === NEW_CAT_VALUE) addCategory();
@@ -3501,6 +3639,10 @@
           closeNotesMenu();
           notesState = sanitizeState(changes[NOTES_KEY].newValue);
           renderNotes();
+          if (elements.noteBulkModal.open) {
+            renderBulkCatOptions();
+            updateBulkPreview();
+          }
         }
       });
 
