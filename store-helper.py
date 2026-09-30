@@ -17,7 +17,10 @@ import urllib.request
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
+VERSION = "1.0.5"
 PORT = 8765
+REPO = "kat1002/ads-tool"
+EXE_NAME = "AdsTool.exe"
 if getattr(sys, "frozen", False):
     ROOT = sys._MEIPASS  # PyInstaller unpack dir holding the bundled ads-tool.html
 else:
@@ -92,6 +95,64 @@ def fetch_appstore(app_id, country="us"):
     return {"name": item.get("trackName", "").strip(), "iconUrl": icon}
 
 
+def version_tuple(text):
+    parts = re.findall(r"\d+", str(text).lstrip("vV"))
+    if not parts:
+        raise ValueError(f"bad version: {text}")
+    return tuple(int(p) for p in parts)
+
+
+def self_update():
+    """Download the latest release exe and swap it in place of the running one."""
+    if not getattr(sys, "frozen", False):
+        raise ValueError("chỉ cập nhật được khi chạy bản AdsTool.exe")
+    release = json.loads(http_get(f"https://api.github.com/repos/{REPO}/releases/latest")[0])
+    latest = str(release.get("tag_name", ""))
+    if version_tuple(latest) <= version_tuple(VERSION):
+        raise ValueError("đã là bản mới nhất")
+    asset = next((a for a in release.get("assets") or [] if a.get("name") == EXE_NAME), None)
+    if not asset or not asset.get("browser_download_url"):
+        raise ValueError(f"release không có {EXE_NAME}")
+    exe = sys.executable
+    folder = os.path.dirname(exe)
+    new_path = os.path.join(folder, "AdsTool.new.exe")
+    old_path = os.path.join(folder, "AdsTool.old.exe")
+    try:
+        data = http_get(asset["browser_download_url"], timeout=300)[0]
+        if not data.startswith(b"MZ") or len(data) < 1_000_000:
+            raise ValueError("file tải về không hợp lệ")
+        with open(new_path, "wb") as fh:
+            fh.write(data)
+        if os.path.exists(old_path):
+            os.remove(old_path)
+        os.replace(exe, old_path)  # a running exe can be renamed but not overwritten
+        try:
+            os.replace(new_path, exe)
+        except OSError:
+            os.replace(old_path, exe)  # roll back
+            raise
+    except (OSError, ValueError, urllib.error.URLError):
+        try:
+            if os.path.exists(new_path):
+                os.remove(new_path)
+        except OSError:
+            pass
+        raise
+    subprocess.Popen([exe, "--after-update"], close_fds=True,
+                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
+
+
+def stop_soon(server):
+    def run():
+        time.sleep(0.5)
+        try:
+            server.shutdown()
+            server.server_close()
+        finally:
+            os._exit(0)
+    threading.Thread(target=run, daemon=True).start()
+
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=ROOT, **kwargs)
@@ -117,6 +178,8 @@ class Handler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/ping":
                 LAST_PING[0] = time.time()
                 return self.send_json({"ok": True})
+            if parsed.path == "/api/version":
+                return self.send_json({"ok": True, "version": VERSION})
             if parsed.path == "/api/play":
                 return self.send_json({"ok": True, **fetch_play(q.get("id", ""))})
             if parsed.path == "/api/appstore":
@@ -136,6 +199,19 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json({"ok": False, "error": "unknown endpoint"}, 404)
         except (ValueError, urllib.error.URLError, OSError) as exc:
             return self.send_json({"ok": False, "error": str(exc)}, 502)
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if self.headers.get("Origin") != f"http://127.0.0.1:{PORT}":
+            return self.send_json({"ok": False, "error": "forbidden"}, 403)
+        if parsed.path != "/api/update":
+            return self.send_json({"ok": False, "error": "unknown endpoint"}, 404)
+        try:
+            self_update()
+        except (ValueError, urllib.error.URLError, OSError) as exc:
+            return self.send_json({"ok": False, "error": str(exc)}, 502)
+        self.send_json({"ok": True})
+        stop_soon(self.server)
 
     def log_message(self, fmt, *args):
         if sys.stderr:
@@ -171,22 +247,53 @@ def open_app_window():
                              "--no-first-run", "--no-default-browser-check", "--window-size=1400,900"])
 
 
+def cleanup_old_exe():
+    if not getattr(sys, "frozen", False):
+        return
+    old_path = os.path.join(os.path.dirname(sys.executable), "AdsTool.old.exe")
+    for _ in range(15):
+        try:
+            if os.path.exists(old_path):
+                os.remove(old_path)
+            return
+        except OSError:
+            time.sleep(1)
+
+
+def watch_pings():
+    """Quit once the page stops pinging."""
+    LAST_PING[0] = time.time()
+    while time.time() - LAST_PING[0] < 60:
+        time.sleep(2)
+
+
 if __name__ == "__main__":
-    try:
-        server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    except OSError:
+    threading.Thread(target=cleanup_old_exe, daemon=True).start()
+    after_update = "--after-update" in sys.argv
+    server = None
+    for _ in range(10 if after_update else 1):
+        try:
+            server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+            break
+        except OSError:
+            time.sleep(1)
+    if server is None:
+        if after_update:
+            sys.exit(1)
         # Port busy: the tool is already running, so just open another window.
         if not open_app_window():
             webbrowser.open(URL)
         sys.exit(0)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    window = open_app_window()
-    if window:
-        window.wait()  # closing the app window stops the tool
+    if after_update:
+        # The existing page keeps its window open and pings us; no new window.
+        watch_pings()
     else:
-        # No Edge: open the default browser and quit once the page stops pinging.
-        webbrowser.open(URL)
-        LAST_PING[0] = time.time()
-        while time.time() - LAST_PING[0] < 60:
-            time.sleep(2)
+        window = open_app_window()
+        if window:
+            window.wait()  # closing the app window stops the tool
+        else:
+            # No Edge: open the default browser and quit once the page stops pinging.
+            webbrowser.open(URL)
+            watch_pings()
     server.shutdown()
