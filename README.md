@@ -58,4 +58,5 @@ Phiên bản hiện tại hiển thị ở đầu trang Ads Tool. Khi có bản 
 - Edit the files here, then click reload on `chrome://extensions`.
 - `ads-tool.js` is the app; `ads-tool.html` is markup + CSS; `jszip.min.js` is JSZip 3.10.1.
 - Store fetch (`fetchPlay`, `fetchAppStore`) runs straight from the extension page. `host_permissions` in `manifest.json` lift CORS for the store and image hosts.
-- Release: bump `version` in `manifest.json`, then `git tag vX.Y.Z && git push --tags`. The workflow attaches `ads-tool-extension.zip` to a GitHub Release. Upload `AdsTool.exe` (built from the `exe` branch) with `gh release upload`.
+- Release: bump `version` in `manifest.json`, then `git tag vX.Y.Z && git push --tags`. The workflow attaches `ads-tool-extension.zip` to a GitHub Release, and its `windows-exe` job builds `AdsTool.exe` from the `exe` branch and uploads it to the same release.
+- The `exe` branch page (`ads-tool.html` there) is generated from main's files: on `exe`, run `python build-exe-page.py` (it reads `git show main:...`), and set `VERSION` in `store-helper.py` to the new version. Do this and commit on `exe` (and push it) before tagging, otherwise the `windows-exe` job fails on the version check or ships a stale page.
