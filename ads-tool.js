@@ -62,7 +62,17 @@
         noteText: $("noteText"),
         noteSaveBtn: $("noteSaveBtn"),
         notesList: $("notesList"),
-        notesCount: $("notesCount")
+        notesCount: $("notesCount"),
+        versionBadge: $("versionBadge"),
+        checkUpdateBtn: $("checkUpdateBtn"),
+        updateStatus: $("updateStatus"),
+        updateBanner: $("updateBanner"),
+        updateText: $("updateText"),
+        updateBtn: $("updateBtn"),
+        manualUpdateBtn: $("manualUpdateBtn"),
+        updateNotesLink: $("updateNotesLink"),
+        updateNotes: $("updateNotes"),
+        updateHelp: $("updateHelp")
       };
 
       const ICON_SIZE = 512;
@@ -356,6 +366,239 @@
         if (!notes.length) return;
         const lines = notes.map((item) => `${item.url}\t${item.note || ""}`);
         downloadBlob(new Blob([lines.join("\n")], { type: "text/plain" }), "ads-tool-links.txt");
+      }
+
+      // ---- update check ----
+      const UPDATE_KEY = "adsToolUpdateCheck";
+      const REPO = "kat1002/ads-tool";
+      const CHECK_INTERVAL_MS = 6 * 3600 * 1000;
+      const ASSET_NAME = "ads-tool-extension.zip";
+      const ALLOWED_FILES = ["manifest.json", "background.js", "ads-tool.html", "ads-tool.js", "jszip.min.js"];
+      const ICON_PATH_RE = /^icons\/[A-Za-z0-9_.-]+\.png$/;
+      let latestRelease = null;
+
+      function currentVersion() {
+        return (typeof chrome !== "undefined" && chrome.runtime?.getManifest?.().version) || "0.0.0";
+      }
+
+      function compareVersions(a, b) {
+        const parse = (v) => String(v || "").trim().replace(/^v/i, "").split(/[-+]/)[0].split(".").map((n) => Number(n) || 0);
+        const pa = parse(a);
+        const pb = parse(b);
+        const len = Math.max(pa.length, pb.length);
+        for (let i = 0; i < len; i += 1) {
+          const x = pa[i] || 0;
+          const y = pb[i] || 0;
+          if (x !== y) return x > y ? 1 : -1;
+        }
+        return 0;
+      }
+
+      function isAllowedPath(path) {
+        if (typeof path !== "string" || !path) return false;
+        if (path.includes("..") || path.includes("\\") || path.includes(":") || path.startsWith("/")) return false;
+        return ALLOWED_FILES.includes(path) || ICON_PATH_RE.test(path);
+      }
+
+      async function fetchLatestRelease() {
+        const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+          headers: { Accept: "application/vnd.github+json" },
+          cache: "no-store"
+        });
+        if (!res.ok) {
+          throw new Error(res.status === 403 ? "GitHub giới hạn lượt kiểm tra, thử lại sau" : `GitHub trả về ${res.status}`);
+        }
+        const data = await res.json();
+        const asset = (data.assets || []).find((item) => item.name === ASSET_NAME);
+        return {
+          version: String(data.tag_name || "").replace(/^v/i, ""),
+          htmlUrl: data.html_url,
+          assetUrl: asset?.browser_download_url || data.html_url,
+          body: (data.body || "").slice(0, 1500)
+        };
+      }
+
+      function renderUpdate(latest) {
+        const current = currentVersion();
+        latestRelease = latest || null;
+        elements.versionBadge.textContent = `v${current}`;
+        if (latest && compareVersions(latest.version, current) > 0) {
+          elements.updateBanner.classList.remove("hidden");
+          elements.updateText.textContent = `Có bản mới v${latest.version}`;
+          elements.updateNotesLink.href = latest.htmlUrl;
+          elements.updateNotes.textContent = latest.body;
+          elements.updateNotes.classList.toggle("hidden", !latest.body);
+          elements.versionBadge.className = "badge err";
+        } else {
+          elements.updateBanner.classList.add("hidden");
+          elements.versionBadge.className = "badge ok";
+        }
+      }
+
+      async function checkForUpdate({ force } = {}) {
+        let cached = null;
+        try {
+          try {
+            const stored = await chrome.storage.local.get(UPDATE_KEY);
+            cached = stored[UPDATE_KEY] || null;
+          } catch (e) {
+            cached = null;
+          }
+          if (!force && cached && cached.latest && Date.now() - cached.checkedAt < CHECK_INTERVAL_MS) {
+            renderUpdate(cached.latest);
+            return;
+          }
+          elements.updateStatus.textContent = "Đang kiểm tra…";
+          const latest = await fetchLatestRelease();
+          try {
+            await chrome.storage.local.set({ [UPDATE_KEY]: { checkedAt: Date.now(), latest } });
+          } catch (e) {
+            // cache is best-effort
+          }
+          renderUpdate(latest);
+          const isNew = compareVersions(latest.version, currentVersion()) > 0;
+          elements.updateStatus.textContent = force && !isNew ? "Đã là bản mới nhất" : "";
+        } catch (e) {
+          try {
+            if (cached && cached.latest) renderUpdate(cached.latest);
+            elements.updateStatus.textContent = force ? `Không kiểm tra được: ${e.message}` : "";
+          } catch (e2) {
+            // never throw
+          }
+        }
+      }
+
+      // IndexedDB key/value store (holds the extension folder handle)
+      function idbOpen() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open("adsToolFs", 1);
+          req.onupgradeneeded = () => req.result.createObjectStore("kv");
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function idbGet(key) {
+        const db = await idbOpen();
+        return new Promise((resolve, reject) => {
+          const req = db.transaction("kv", "readonly").objectStore("kv").get(key);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function idbSet(key, val) {
+        const db = await idbOpen();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction("kv", "readwrite");
+          tx.objectStore("kv").put(val, key);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+
+      async function getExtensionDir() {
+        let dir = null;
+        const stored = await idbGet("extDir").catch(() => null);
+        if (stored) {
+          const opts = { mode: "readwrite" };
+          let perm = await stored.queryPermission(opts);
+          if (perm !== "granted") perm = await stored.requestPermission(opts);
+          if (perm === "granted") dir = stored;
+          else await idbSet("extDir", null).catch(() => {});
+        }
+        if (!dir) {
+          if (typeof window.showDirectoryPicker !== "function") {
+            throw new Error("Trình duyệt không hỗ trợ chọn thư mục");
+          }
+          dir = await window.showDirectoryPicker({ id: "ads-tool", mode: "readwrite" });
+        }
+        try {
+          const manifestFile = await (await dir.getFileHandle("manifest.json")).getFile();
+          const manifest = JSON.parse(await manifestFile.text());
+          if (manifest.name !== "Ads Tool" || manifest.version !== currentVersion()) throw new Error("mismatch");
+        } catch (e) {
+          await idbSet("extDir", null).catch(() => {});
+          throw new Error("Thư mục không đúng: cần thư mục chứa manifest.json của Ads Tool đang chạy");
+        }
+        await idbSet("extDir", dir);
+        return dir;
+      }
+
+      async function downloadAndValidate(latest) {
+        const res = await fetch(latest.assetUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error(`Tải file thất bại (${res.status})`);
+        const zip = await JSZip.loadAsync(await res.blob());
+        const files = [];
+        zip.forEach((path, entry) => {
+          if (entry.dir) return;
+          if (!isAllowedPath(path)) {
+            console.warn("Bỏ qua file không hợp lệ trong gói cập nhật:", path);
+            return;
+          }
+          files.push({ path, entry });
+        });
+        const manifestEntry = files.find((item) => item.path === "manifest.json");
+        if (!manifestEntry) throw new Error("Gói cập nhật thiếu manifest.json");
+        const manifest = JSON.parse(await manifestEntry.entry.async("string"));
+        if (manifest.name !== "Ads Tool" || manifest.version !== latest.version) {
+          throw new Error("Gói cập nhật không khớp phiên bản");
+        }
+        const result = [];
+        for (const item of files) {
+          result.push({ path: item.path, blob: await item.entry.async("blob") });
+        }
+        return result;
+      }
+
+      async function writeFiles(dir, entries) {
+        const ordered = entries.filter((e) => e.path !== "manifest.json")
+          .concat(entries.filter((e) => e.path === "manifest.json"));
+        let iconsDir = null;
+        for (const { path, blob } of ordered) {
+          let parent = dir;
+          let name = path;
+          if (path.startsWith("icons/")) {
+            if (!iconsDir) iconsDir = await dir.getDirectoryHandle("icons", { create: true });
+            parent = iconsDir;
+            name = path.slice("icons/".length);
+          }
+          const handle = await parent.getFileHandle(name, { create: true });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        }
+      }
+
+      async function oneClickUpdate(latest) {
+        if (!latest) return;
+        const buttons = [elements.updateBtn, elements.manualUpdateBtn, elements.checkUpdateBtn];
+        for (const btn of buttons) btn.disabled = true;
+        try {
+          const dir = await getExtensionDir(); // must stay the first await (user gesture)
+          elements.updateStatus.textContent = `Đang tải v${latest.version}…`;
+          const entries = await downloadAndValidate(latest);
+          elements.updateStatus.textContent = "Đang ghi file…";
+          await writeFiles(dir, entries);
+          await chrome.storage.local.set({ adsToolReopenAfterUpdate: latest.version });
+          elements.updateStatus.textContent = "Xong, đang khởi động lại…";
+          chrome.runtime.reload();
+        } catch (e) {
+          if (e && e.name === "AbortError") {
+            elements.updateStatus.textContent = "";
+          } else {
+            elements.updateStatus.textContent = `Không tự cập nhật được: ${e && e.message}. Dùng Tải thủ công.`;
+            manualUpdate(latest);
+          }
+        } finally {
+          for (const btn of buttons) btn.disabled = false;
+        }
+      }
+
+      function manualUpdate(latest) {
+        if (!latest) return;
+        window.open(latest.assetUrl, "_blank", "noopener");
+        elements.updateHelp.classList.remove("hidden");
       }
 
       // ---- step 3: variant cards ----
@@ -2486,8 +2729,18 @@
         }
       });
 
+      elements.checkUpdateBtn.addEventListener("click", () => checkForUpdate({ force: true }));
+      elements.updateBtn.addEventListener("click", () => {
+        if (latestRelease) oneClickUpdate(latestRelease);
+      });
+      elements.manualUpdateBtn.addEventListener("click", () => {
+        if (latestRelease) manualUpdate(latestRelease);
+      });
+
       addVariantRow();
       updateFileMeta();
       refreshAll();
       loadNotes();
+      elements.versionBadge.textContent = `v${currentVersion()}`;
+      checkForUpdate({ force: false });
     })();

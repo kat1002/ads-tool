@@ -38,7 +38,12 @@ Bấm biểu tượng **Ads Tool** trên thanh công cụ, tool mở trong một
 
 ## Cập nhật
 
-Tải zip mới, giải nén đè lên thư mục cũ, rồi vào trang extensions và bấm **Reload** ở Ads Tool.
+Phiên bản hiện tại hiển thị ở đầu trang Ads Tool. Khi có bản release mới trên GitHub, một banner cập nhật sẽ xuất hiện.
+
+- **Cập nhật:** tự tải bản mới và ghi đè các file. Lần đầu bạn chọn thư mục đang cài Ads Tool (thư mục chứa `manifest.json`); trình duyệt có thể hỏi cấp quyền lại mỗi phiên làm việc.
+- **Tải thủ công:** cách dự phòng. Tải zip mới, giải nén đè lên thư mục cũ, mở `chrome://extensions` (Edge: `edge://extensions`) rồi bấm **Reload** ở Ads Tool.
+- Nếu trình duyệt từ chối thư mục đã chọn (thư mục hệ thống, ví dụ nằm trong `AppData`), hãy chuyển extension sang chỗ khác như `Documents\AdsTool`, rồi Load unpacked lại từ thư mục đó.
+- Lần nâng cấp đầu tiên lên 1.0.3 phải làm thủ công, vì bản này thêm quyền mới.
 
 ## Lỗi thường gặp
 

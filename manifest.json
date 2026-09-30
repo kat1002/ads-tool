@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Ads Tool",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Batch tool for ads playables: fetch store name/icon, rename and export.",
   "action": { "default_title": "Ads Tool", "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" } },
   "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
@@ -11,6 +11,8 @@
     "https://play.google.com/*",
     "https://itunes.apple.com/*",
     "https://*.googleusercontent.com/*",
-    "https://*.mzstatic.com/*"
+    "https://*.mzstatic.com/*",
+    "https://github.com/*",
+    "https://*.githubusercontent.com/*"
   ]
 }
