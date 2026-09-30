@@ -138,7 +138,10 @@ def self_update():
         except OSError:
             pass
         raise
-    subprocess.Popen([exe, "--after-update"], close_fds=True,
+    # A onefile child inherits our PyInstaller env and would reuse our (soon deleted) unpack dir.
+    env = {k: v for k, v in os.environ.items() if k != "_MEIPASS2" and not k.startswith("_PYI_")}
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    subprocess.Popen([exe, "--after-update"], close_fds=True, env=env, cwd=folder,
                      creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
 
 
@@ -251,7 +254,7 @@ def cleanup_old_exe():
     if not getattr(sys, "frozen", False):
         return
     old_path = os.path.join(os.path.dirname(sys.executable), "AdsTool.old.exe")
-    for _ in range(15):
+    for _ in range(60):  # the old bootloader process keeps the file locked until it exits
         try:
             if os.path.exists(old_path):
                 os.remove(old_path)
