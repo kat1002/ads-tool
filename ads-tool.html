@@ -105,22 +105,56 @@
     .source-line .source-name { flex: 1; word-break: break-all; }
     .source-line .source-size { color: var(--muted); white-space: nowrap; }
     .source-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .notes-form { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
-    .notes-list { display: flex; flex-direction: column; gap: 6px; }
-    .note-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 12px; }
-    .note-line .note-text { color: var(--muted); flex-basis: 100%; word-break: break-word; }
-    .note-line .grow { flex: 1; }
-    .notes-launcher { position: fixed; right: 16px; bottom: 16px; z-index: 50; box-shadow: 0 4px 14px rgba(0,0,0,.25); border-radius: 999px; }
+    .notes-launcher { position: fixed; right: 16px; bottom: 16px; z-index: 50; width: 48px; height: 48px; min-height: 48px; padding: 0; display: inline-grid; place-items: center; box-shadow: 0 4px 14px rgba(0,0,0,.25); border-radius: 999px; }
+    .notes-launcher svg { display: block; }
+    .notes-badge { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--err); color: var(--surface); font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }
+    .notes-badge:empty { display: none; }
     .notes-widget { position: fixed; right: 16px; bottom: 16px; z-index: 50; width: 360px; max-width: calc(100vw - 32px); max-height: min(70vh, 560px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.3); overflow: hidden; }
     .notes-widget.hidden, .notes-launcher.hidden { display: none; }
-    .notes-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+    .notes-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
     .notes-head strong { flex: 1; }
-    .notes-tabs { display: flex; gap: 4px; padding: 6px 8px 0; overflow-x: auto; border-bottom: 1px solid var(--border); flex: none; }
-    .notes-tab { flex: none; min-height: 30px; padding: 4px 10px; border-radius: 8px 8px 0 0; border-bottom: none; font-size: 12px; white-space: nowrap; }
-    .notes-tab[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
-    .notes-body { padding: 8px 10px 10px; overflow-y: auto; }
-    .notes-cat-bar { display: flex; align-items: center; gap: 6px; }
-    .notes-cat-bar .grow { flex: 1; word-break: break-word; }
+    .icon-btn { display: inline-grid; place-items: center; width: 44px; min-height: 44px; padding: 0; }
+    .icon-btn svg { display: block; }
+    .notes-body { padding: 8px 10px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .notes-field label { margin-bottom: 4px; }
+    .notes-select { width: 100%; min-height: 44px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
+    .notes-add { display: flex; gap: 6px; }
+    .notes-add input[type="text"] { flex: 1; min-height: 44px; }
+    .notes-add input[aria-invalid="true"] { border-color: var(--err); }
+    .notes-add button { width: 44px; min-height: 44px; padding: 0; font-size: 20px; line-height: 1; }
+    .notes-toast { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border-radius: 8px; font-size: 12px; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--text); }
+    .notes-toast.ok { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+    .notes-toast.warn { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+    .notes-toast.err { background: var(--err-soft); border-color: var(--err); color: var(--err); }
+    .notes-toast .toast-text { flex: 1; word-break: break-word; }
+    .notes-toast button { min-height: 44px; }
+    .notes-list { display: flex; flex-direction: column; }
+    .note-row { display: flex; align-items: stretch; gap: 4px; border-top: 1px solid var(--border); }
+    .note-main { flex: 1; min-width: 0; min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 6px 8px; border: none; border-radius: 8px; background: transparent; text-align: left; font-weight: 500; }
+    .note-main:hover:not(:disabled) { background: var(--surface-2); }
+    .note-badge { flex: none; padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); }
+    .note-badge.play { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+    .note-badge.ios { border-color: var(--accent); color: var(--accent-fg); background: var(--accent-soft); }
+    .note-label { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .note-note { flex-basis: 100%; color: var(--muted); font-size: 12px; font-weight: 400; word-break: break-word; }
+    .note-more { flex: none; border: none; background: transparent; }
+    .notes-menu { position: fixed; z-index: 60; min-width: 190px; max-width: calc(100vw - 16px); padding: 4px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.3); }
+    .notes-menu button { min-height: 44px; border: none; background: transparent; text-align: left; font-weight: 500; white-space: normal; }
+    .notes-menu hr { width: 100%; margin: 4px 0; border: none; border-top: 1px solid var(--border); }
+    .bulk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+    .bulk-head label { margin: 0; }
+    .note-picker { margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+    .note-picker fieldset { margin: 8px 0 0; padding: 0; border: none; min-width: 0; }
+    .note-picker legend { padding: 0; }
+    .pick-row { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 0 4px; font-weight: 500; cursor: pointer; }
+    .pick-row input { flex: none; margin: 0; width: 16px; height: 16px; }
+    .pick-row.cat { font-weight: 700; }
+    .pick-row.indent { margin-left: 22px; font-size: 12px; }
+    .pick-row.disabled { color: var(--muted); cursor: not-allowed; }
+    .pick-list { max-height: 240px; overflow-y: auto; }
+    .note-picker-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    .note-picker-foot .meta { flex: 1; }
+    @media (prefers-reduced-motion: no-preference) { .note-main, .note-more { transition: background-color .15s; } }
     @media (max-width: 900px) { body { padding-bottom: 72px; } }
 
     /* step 2: two-part store field */
@@ -349,7 +383,19 @@
 
     <div id="stageInput">
       <div class="modal-body">
-        <label for="bulkText">Dán danh sách link</label>
+        <div class="bulk-head">
+          <label for="bulkText">Dán danh sách link</label>
+          <button id="notePickBtn" class="small" type="button" aria-expanded="false" aria-controls="notePicker">Từ ghi chú (0)</button>
+        </div>
+        <div id="notePicker" class="note-picker hidden">
+          <label class="pick-row cat"><input id="notePickAll" type="checkbox"> Chọn tất cả</label>
+          <div id="notePickList" class="pick-list"></div>
+          <div class="note-picker-foot">
+            <span id="notePickStatus" class="meta" role="status"></span>
+            <button id="notePickClose" class="small" type="button">Đóng</button>
+            <button id="notePickInsert" class="small primary" type="button" disabled>Thêm link</button>
+          </div>
+        </div>
         <textarea id="bulkText" wrap="off" spellcheck="false" placeholder="https://play.google.com/store/apps/details?id=com.example.one   https://apps.apple.com/us/app/example/id123456789&#10;https://play.google.com/store/apps/details?id=com.example.two&#10;https://apps.apple.com/us/app/example-three/id987654321"></textarea>
         <p class="hint">Mỗi dòng là một app. Trên một dòng có thể có link Google Play, link App Store hoặc cả hai (cách nhau bằng dấu cách, tab hoặc dấu |). Copy 2 cột từ Excel/Sheets cũng dán được. Tham số tracking trong link sẽ tự bị bỏ.</p>
         <p id="bulkHint" class="hint warn hidden"></p>
@@ -379,30 +425,31 @@
     </div>
   </dialog>
 
-  <button id="notesLauncher" class="notes-launcher primary" type="button" aria-expanded="false" aria-controls="notesWidget">Link <span id="notesCount"></span></button>
+  <button id="notesLauncher" class="notes-launcher primary" type="button" aria-label="Link đã lưu" aria-expanded="false" aria-controls="notesWidget">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>
+    <span id="notesCount" class="notes-badge"></span>
+  </button>
   <section id="notesWidget" class="notes-widget hidden" aria-label="Link đã lưu">
     <div class="notes-head">
       <strong>Link đã lưu</strong>
-      <button id="notesExportBtn" class="small" type="button">Xuất .txt</button>
-      <button id="notesImportBtn" class="small" type="button">Nhập .txt</button>
-      <button id="notesCloseBtn" class="small" type="button" aria-label="Thu nhỏ">&minus;</button>
+      <button id="notesMenuBtn" class="icon-btn" type="button" aria-label="Tuỳ chọn danh mục" aria-haspopup="menu" aria-expanded="false" aria-controls="notesMenu"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      <button id="notesCloseBtn" class="icon-btn" type="button" aria-label="Thu nhỏ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       <input id="notesImportFile" type="file" accept=".txt,text/plain" class="hidden">
     </div>
-    <div id="notesTabs" class="notes-tabs" role="tablist" aria-label="Danh mục link"></div>
     <div class="notes-body">
-      <div class="notes-form">
-        <input id="noteUrl" type="text" placeholder="Dán link (Play, App Store, hoặc URL bất kỳ)" autocomplete="off" spellcheck="false" aria-label="Link cần lưu">
-        <input id="noteText" type="text" placeholder="Ghi chú (tuỳ chọn)" autocomplete="off" aria-label="Ghi chú">
-        <div class="actions"><button id="noteSaveBtn" class="primary small" type="button">Lưu</button></div>
+      <div class="notes-field">
+        <label for="notesCatSelect">Danh mục</label>
+        <select id="notesCatSelect" class="notes-select"></select>
       </div>
-      <div class="notes-cat-bar">
-        <span class="meta grow" id="notesCatName"></span>
-        <button id="notesRenameBtn" class="small" type="button">Đổi tên</button>
-        <button id="notesDeleteCatBtn" class="small danger" type="button">Xoá danh mục</button>
-      </div>
+      <form id="notesForm" class="notes-add" autocomplete="off">
+        <input id="noteUrl" type="text" placeholder="Dán link, thêm ghi chú sau dấu cách" autocomplete="off" spellcheck="false" aria-label="Link cần lưu (ghi chú tuỳ chọn sau dấu cách)">
+        <button id="noteSaveBtn" class="primary" type="submit" aria-label="Lưu link">+</button>
+      </form>
+      <div id="notesToast" class="notes-toast hidden" role="status"></div>
       <div id="notesList" class="notes-list"></div>
     </div>
   </section>
+  <div id="notesMenu" class="notes-menu hidden" role="menu"></div>
 
   <script src="ads-tool.js"></script>
 </body>

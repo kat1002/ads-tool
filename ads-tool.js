@@ -59,20 +59,25 @@
         checkNotice: $("checkNotice"),
         checkSummary: $("checkSummary"),
         noteUrl: $("noteUrl"),
-        noteText: $("noteText"),
+        notesForm: $("notesForm"),
         noteSaveBtn: $("noteSaveBtn"),
+        notesCatSelect: $("notesCatSelect"),
         notesList: $("notesList"),
         notesCount: $("notesCount"),
         notesLauncher: $("notesLauncher"),
         notesWidget: $("notesWidget"),
-        notesTabs: $("notesTabs"),
-        notesCatName: $("notesCatName"),
-        notesRenameBtn: $("notesRenameBtn"),
-        notesDeleteCatBtn: $("notesDeleteCatBtn"),
-        notesExportBtn: $("notesExportBtn"),
-        notesImportBtn: $("notesImportBtn"),
+        notesMenuBtn: $("notesMenuBtn"),
+        notesMenu: $("notesMenu"),
+        notesToast: $("notesToast"),
         notesImportFile: $("notesImportFile"),
         notesCloseBtn: $("notesCloseBtn"),
+        notePickBtn: $("notePickBtn"),
+        notePicker: $("notePicker"),
+        notePickAll: $("notePickAll"),
+        notePickList: $("notePickList"),
+        notePickStatus: $("notePickStatus"),
+        notePickClose: $("notePickClose"),
+        notePickInsert: $("notePickInsert"),
         versionBadge: $("versionBadge"),
         checkUpdateBtn: $("checkUpdateBtn"),
         linkDirBtn: $("linkDirBtn"),
@@ -280,6 +285,7 @@
       const DEFAULT_CAT = "Chung";
       const MAX_CAT_NAME = 40;
       let notesState = { version: 2, activeId: "", open: false, categories: [] };
+      let lastSavedJson = "";
 
       function newId() {
         return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -327,6 +333,7 @@
             notesState = sanitizeState(stored[NOTES_KEY]);
           } else if (Array.isArray(stored[NOTES_KEY_V1])) {
             notesState = sanitizeState({ categories: [{ name: DEFAULT_CAT, links: stored[NOTES_KEY_V1] }] });
+            lastSavedJson = JSON.stringify(notesState);
             await chrome.storage.local.set({ [NOTES_KEY]: notesState });
             await chrome.storage.local.remove(NOTES_KEY_V1);
           } else {
@@ -339,6 +346,7 @@
       }
 
       function saveNotes() {
+        lastSavedJson = JSON.stringify(notesState);
         try {
           Promise.resolve(chrome.storage.local.set({ [NOTES_KEY]: notesState })).catch((e) => {
             showMsg(`Không lưu được ghi chú: ${e.message}`, "err");
@@ -356,43 +364,74 @@
         return /^https?:\/\/\S+$/i.test(cleaned) ? cleaned : null;
       }
 
+      // Stable identity of a store link ("play:<package>" or "ios:<id>"), null for anything else.
+      function storeKey(url) {
+        const value = String(url || "").trim();
+        const kind = classifyCell(value);
+        if (kind === "play") {
+          const id = parsePlayId(value);
+          return id ? `play:${id}` : null;
+        }
+        if (kind === "ios") {
+          const apple = parseAppStore(value);
+          return apple ? `ios:${apple.id}` : null;
+        }
+        return null;
+      }
+
+      function noteLabel(url) {
+        const value = String(url || "").trim();
+        const kind = classifyCell(value);
+        if (kind === "play") return parsePlayId(value) || value;
+        if (kind === "ios") {
+          const apple = parseAppStore(value);
+          if (apple) return `${apple.country.toUpperCase()} · id${apple.id}`;
+        }
+        return value.replace(/^https?:\/\/(www\.)?/i, "");
+      }
+
       function findCategoryByName(name) {
         const key = name.toLowerCase();
         return notesState.categories.find((cat) => cat.name.toLowerCase() === key);
       }
 
+      const NEW_CAT_VALUE = "__new__";
+      const ICON_MORE = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+
       function renderNotes() {
         const cat = activeCat();
         const total = notesState.categories.reduce((sum, item) => sum + item.links.length, 0);
-        elements.notesCount.textContent = total ? `(${total})` : "";
+        elements.notesCount.textContent = total ? String(total) : "";
+        elements.notesLauncher.setAttribute("aria-label", total ? `Link đã lưu (${total})` : "Link đã lưu");
         elements.notesLauncher.classList.toggle("hidden", notesState.open);
         elements.notesLauncher.setAttribute("aria-expanded", notesState.open ? "true" : "false");
         elements.notesWidget.classList.toggle("hidden", !notesState.open);
-        elements.notesTabs.innerHTML = notesState.categories.map((item) => {
-          const selected = item.id === cat.id;
-          return `<button class="notes-tab" type="button" role="tab" aria-selected="${selected}" data-cat-id="${escapeHtml(item.id)}" title="${escapeHtml(item.name)}">${escapeHtml(item.name)} (${item.links.length})</button>`;
-        }).join("") + '<button class="notes-tab" type="button" data-note-action="add-cat" title="Thêm danh mục" aria-label="Thêm danh mục">+</button>';
-        elements.notesCatName.textContent = `${cat.name} · ${cat.links.length} link`;
+        elements.notesCatSelect.innerHTML = notesState.categories.map((item) =>
+          `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)} (${item.links.length})</option>`
+        ).join("") + `<option value="${NEW_CAT_VALUE}">+ Danh mục mới…</option>`;
+        elements.notesCatSelect.value = cat.id;
+        updatePickCount();
         if (!cat.links.length) {
-          elements.notesList.innerHTML = '<div class="meta">Chưa có link nào trong danh mục này.</div>';
+          elements.notesList.innerHTML = '<div class="meta">Chưa có link nào. Dán link Google Play hoặc App Store vào ô trên rồi nhấn Enter.</div>';
           return;
         }
         elements.notesList.innerHTML = cat.links.map((item) => {
           const kind = classifyCell(item.url);
-          const chip = kind
-            ? linkChip(kind, item.url, true)
-            : `<a class="chip-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>`;
+          const badge = kind === "play" ? '<span class="note-badge play">Play</span>'
+            : kind === "ios" ? '<span class="note-badge ios">App Store</span>'
+            : '<span class="note-badge">Web</span>';
+          const label = noteLabel(item.url);
           const id = escapeHtml(item.id);
-          const text = item.note ? `<div class="note-text">${escapeHtml(item.note)}</div>` : "";
-          return `<div class="note-line">${chip}<span class="grow"></span>`
-            + `<button class="small" type="button" data-note-action="copy" data-note-id="${id}">Copy</button> `
-            + `<button class="small" type="button" data-note-action="open" data-note-id="${id}">Mở</button> `
-            + `<button class="small" type="button" data-note-action="remove" data-note-id="${id}">Xoá</button>`
-            + `</div>${text}`;
+          const text = item.note ? `<span class="note-note">${escapeHtml(item.note)}</span>` : "";
+          return `<div class="note-row">`
+            + `<button class="note-main" type="button" data-note-action="copy" data-note-id="${id}" title="Bấm để copy: ${escapeHtml(item.url)}">${badge}<span class="note-label">${escapeHtml(label)}</span>${text}</button>`
+            + `<button class="note-more icon-btn" type="button" data-note-action="menu" data-note-id="${id}" aria-haspopup="menu" aria-expanded="false" aria-label="Tuỳ chọn link ${escapeHtml(label)}">${ICON_MORE}</button>`
+            + `</div>`;
         }).join("");
       }
 
       function setNotesOpen(open) {
+        closeNotesMenu();
         notesState.open = open;
         saveNotes();
         renderNotes();
@@ -400,17 +439,130 @@
         else elements.notesLauncher.focus();
       }
 
-      function askCategoryName(title, initial) {
+      // ---- in-widget toast with optional undo ----
+      let toastTimer = null;
+      let undoAction = null;
+
+      function hideNotesToast() {
+        clearTimeout(toastTimer);
+        undoAction = null;
+        elements.notesToast.className = "notes-toast hidden";
+        elements.notesToast.textContent = "";
+      }
+
+      function showNotesToast(text, kind, undo) {
+        clearTimeout(toastTimer);
+        undoAction = undo || null;
+        elements.notesToast.className = `notes-toast${kind ? ` ${kind}` : ""}`;
+        elements.notesToast.innerHTML = `<span class="toast-text">${escapeHtml(text)}</span>`
+          + (undo ? '<button class="small" type="button" data-note-action="undo">Hoàn tác</button>' : "");
+        toastTimer = setTimeout(hideNotesToast, 6000);
+      }
+
+      // Feedback lands in the widget; the page message is only the fallback while the widget is closed.
+      function notesFeedback(text, kind, undo) {
+        if (notesState.open) showNotesToast(text, kind, undo);
+        else showMsg(text, kind);
+      }
+
+      function snapshotCategories() {
+        return JSON.stringify(notesState.categories);
+      }
+
+      function restoreCategories(json, activeId) {
+        const restored = sanitizeState({ categories: JSON.parse(json), activeId: activeId || notesState.activeId });
+        notesState.categories = restored.categories;
+        notesState.activeId = restored.activeId;
+        saveNotes();
+        renderNotes();
+        hideNotesToast();
+      }
+
+      // ---- shared ⋯ menu ----
+      let menuTrigger = null;
+      let menuContext = null;
+
+      function closeNotesMenu(returnFocus) {
+        if (elements.notesMenu.classList.contains("hidden")) return;
+        elements.notesMenu.classList.add("hidden");
+        elements.notesMenu.innerHTML = "";
+        if (menuTrigger) {
+          menuTrigger.setAttribute("aria-expanded", "false");
+          if (returnFocus && menuTrigger.isConnected) menuTrigger.focus();
+        }
+        menuTrigger = null;
+        menuContext = null;
+      }
+
+      function openNotesMenu(trigger, context, items) {
+        closeNotesMenu();
+        menuTrigger = trigger;
+        menuContext = context;
+        elements.notesMenu.innerHTML = items.map((item) => (item.sep
+          ? '<hr role="separator">'
+          : `<button type="button" role="menuitem" tabindex="-1" data-menu-action="${escapeHtml(item.action)}"${item.arg ? ` data-menu-arg="${escapeHtml(item.arg)}"` : ""}${item.danger ? ' class="danger"' : ""}>${escapeHtml(item.label)}</button>`
+        )).join("");
+        elements.notesMenu.classList.remove("hidden");
+        trigger.setAttribute("aria-expanded", "true");
+        const rect = trigger.getBoundingClientRect();
+        const menuRect = elements.notesMenu.getBoundingClientRect();
+        const left = Math.max(8, Math.min(rect.right - menuRect.width, window.innerWidth - menuRect.width - 8));
+        const below = rect.bottom + 4;
+        const top = below + menuRect.height > window.innerHeight - 8 ? Math.max(8, rect.top - menuRect.height - 4) : below;
+        elements.notesMenu.style.left = `${left}px`;
+        elements.notesMenu.style.top = `${top}px`;
+        const first = elements.notesMenu.querySelector("button");
+        if (first) first.focus();
+      }
+
+      function headerMenuItems() {
+        return [
+          { label: "Đổi tên danh mục…", action: "rename-cat" },
+          { label: "Xoá danh mục", action: "delete-cat", danger: true },
+          { sep: true },
+          { label: "Xuất .txt", action: "export" },
+          { label: "Nhập .txt…", action: "import" }
+        ];
+      }
+
+      function rowMenuItems() {
+        const items = [
+          { label: "Mở link", action: "open" },
+          { label: "Sửa ghi chú…", action: "edit" }
+        ];
+        if (notesState.categories.length > 1) {
+          for (const cat of notesState.categories) {
+            if (cat.id !== notesState.activeId) items.push({ label: `Chuyển sang: ${cat.name}`, action: "move", arg: cat.id });
+          }
+        }
+        items.push({ sep: true }, { label: "Xoá", action: "delete", danger: true });
+        return items;
+      }
+
+      function runNotesMenuAction(context, action, arg) {
+        if (!context) return;
+        if (context.type === "row") {
+          if (action === "open") openNote(context.id);
+          else if (action === "edit") editNote(context.id);
+          else if (action === "move") moveNote(context.id, arg);
+          else if (action === "delete") removeNote(context.id);
+        } else if (action === "rename-cat") renameCategory();
+        else if (action === "delete-cat") deleteCategory();
+        else if (action === "export") exportNotes();
+        else if (action === "import") elements.notesImportFile.click();
+      }
+
+      function askCategoryName(title, initial, exceptId) {
         const raw = prompt(title, initial || "");
         if (raw === null) return null;
         const name = raw.replace(/[\t\r\n]+/g, " ").trim().slice(0, MAX_CAT_NAME);
         if (!name) {
-          showMsg("Tên danh mục không được để trống.", "warn");
+          notesFeedback("Tên danh mục không được để trống.", "warn");
           return null;
         }
         const dup = findCategoryByName(name);
-        if (dup && dup.id !== notesState.activeId) {
-          showMsg("Đã có danh mục trùng tên.", "warn");
+        if (dup && dup.id !== exceptId) {
+          notesFeedback("Đã có danh mục trùng tên.", "warn");
           return null;
         }
         return name;
@@ -418,31 +570,38 @@
 
       function addCategory() {
         const name = askCategoryName("Tên danh mục mới (ví dụ tên game hoặc thể loại):", "");
-        if (!name) return;
+        if (!name) {
+          renderNotes();
+          return;
+        }
         const cat = makeCategory(name);
         notesState.categories.push(cat);
         notesState.activeId = cat.id;
         saveNotes();
         renderNotes();
+        notesFeedback(`Đã tạo danh mục "${name}".`, "ok");
       }
 
       function renameCategory() {
         const cat = activeCat();
-        const name = askCategoryName("Đổi tên danh mục:", cat.name);
+        const name = askCategoryName("Đổi tên danh mục:", cat.name, cat.id);
         if (!name) return;
         cat.name = name;
         saveNotes();
         renderNotes();
+        notesFeedback("Đã đổi tên danh mục.", "ok");
       }
 
       function deleteCategory() {
         const cat = activeCat();
-        if (!confirm(`Xoá danh mục "${cat.name}" và ${cat.links.length} link trong đó?`)) return;
+        const before = snapshotCategories();
+        const beforeActive = notesState.activeId;
         notesState.categories = notesState.categories.filter((item) => item.id !== cat.id);
         if (!notesState.categories.length) notesState.categories.push(makeCategory(DEFAULT_CAT));
         notesState.activeId = notesState.categories[0].id;
         saveNotes();
         renderNotes();
+        notesFeedback(`Đã xoá danh mục "${cat.name}" (${cat.links.length} link).`, "warn", () => restoreCategories(before, beforeActive));
       }
 
       function selectCategory(id) {
@@ -453,21 +612,26 @@
       }
 
       function addNote() {
-        const url = normalizeNoteUrl(elements.noteUrl.value);
+        const raw = elements.noteUrl.value.trim();
+        const match = raw.match(/^(\S+)\s*([\s\S]*)$/);
+        const url = match ? normalizeNoteUrl(match[1]) : null;
         if (!url) {
-          showMsg("Link không hợp lệ.", "warn");
+          elements.noteUrl.setAttribute("aria-invalid", "true");
+          notesFeedback("Link không hợp lệ.", "warn");
+          elements.noteUrl.focus();
           return;
         }
+        elements.noteUrl.removeAttribute("aria-invalid");
         const cat = activeCat();
-        const note = elements.noteText.value.trim().slice(0, 200);
+        const existing = cat.links.find((item) => item.url === url);
+        const note = match[2].replace(/\s+/g, " ").trim().slice(0, 200) || (existing ? existing.note : "");
         cat.links = cat.links.filter((item) => item.url !== url);
         cat.links.unshift({ id: newId(), url, note, createdAt: Date.now() });
         saveNotes();
         renderNotes();
         elements.noteUrl.value = "";
-        elements.noteText.value = "";
         elements.noteUrl.focus();
-        showMsg("Đã lưu link.", "ok");
+        notesFeedback(existing ? "Link đã có, đã đưa lên đầu." : "Đã lưu link.", "ok");
       }
 
       function findLink(id) {
@@ -476,17 +640,45 @@
 
       function removeNote(id) {
         const cat = activeCat();
+        if (!cat.links.some((item) => item.id === id)) return;
+        const before = snapshotCategories();
         cat.links = cat.links.filter((item) => item.id !== id);
         saveNotes();
         renderNotes();
+        notesFeedback("Đã xoá link.", "warn", () => restoreCategories(before));
+      }
+
+      function editNote(id) {
+        const item = findLink(id);
+        if (!item) return;
+        const raw = prompt("Ghi chú:", item.note || "");
+        if (raw === null) return;
+        item.note = raw.replace(/\s+/g, " ").trim().slice(0, 200);
+        saveNotes();
+        renderNotes();
+        notesFeedback("Đã cập nhật ghi chú.", "ok");
+      }
+
+      function moveNote(id, catId) {
+        const from = activeCat();
+        const target = notesState.categories.find((cat) => cat.id === catId);
+        const item = findLink(id);
+        if (!target || !item || target === from) return;
+        const before = snapshotCategories();
+        from.links = from.links.filter((entry) => entry.id !== id);
+        target.links = target.links.filter((entry) => entry.url !== item.url);
+        target.links.unshift(item);
+        saveNotes();
+        renderNotes();
+        notesFeedback(`Đã chuyển sang "${target.name}".`, "ok", () => restoreCategories(before));
       }
 
       function copyNote(id) {
         const item = findLink(id);
         if (!item) return;
         navigator.clipboard.writeText(item.url).then(
-          () => showMsg("Đã copy link.", "ok"),
-          () => showMsg("Không copy được.", "warn")
+          () => notesFeedback("Đã copy link.", "ok"),
+          () => notesFeedback("Không copy được.", "warn")
         );
       }
 
@@ -502,10 +694,146 @@
           for (const item of cat.links) lines.push(`${clean(cat.name)}\t${item.url}\t${clean(item.note)}`);
         }
         if (!lines.length) {
-          showMsg("Chưa có link nào để xuất.", "warn");
+          notesFeedback("Chưa có link nào để xuất.", "warn");
           return;
         }
         downloadBlob(new Blob([lines.join("\n")], { type: "text/plain" }), "ads-tool-links.txt");
+      }
+
+      // ---- "Từ ghi chú" picker inside the Add-links modal ----
+      const pickChecked = new Set();
+
+      function storeLinkGroups() {
+        const groups = [];
+        for (const cat of notesState.categories) {
+          const links = cat.links
+            .map((item) => ({ item, key: storeKey(item.url) }))
+            .filter((entry) => entry.key);
+          if (links.length) groups.push({ cat, links });
+        }
+        return groups;
+      }
+
+      function bulkTextKeys() {
+        const keys = new Set();
+        for (const token of elements.bulkText.value.split(/[\s,;|]+/)) {
+          if (!token) continue;
+          const key = storeKey(token);
+          if (key) keys.add(key);
+        }
+        return keys;
+      }
+
+      function updatePickCount() {
+        const count = storeLinkGroups().reduce((sum, group) => sum + group.links.length, 0);
+        elements.notePickBtn.textContent = `Từ ghi chú (${count})`;
+      }
+
+      function renderPicker() {
+        const groups = storeLinkGroups();
+        const existing = bulkTextKeys();
+        if (!groups.length) {
+          elements.notePickList.innerHTML = '<div class="meta">Chưa có link Google Play / App Store nào trong ghi chú. Lưu link bằng nút Link ở góc dưới phải.</div>';
+          elements.notePickAll.disabled = true;
+          syncPicker();
+          return;
+        }
+        elements.notePickAll.disabled = false;
+        elements.notePickList.innerHTML = groups.map((group) => {
+          const catId = escapeHtml(group.cat.id);
+          const rows = group.links.map(({ item, key }) => {
+            const has = existing.has(key);
+            const kind = key.startsWith("play:") ? "Play" : "App Store";
+            const id = escapeHtml(item.id);
+            const note = item.note ? ` · ${escapeHtml(item.note)}` : "";
+            return `<label class="pick-row indent${has ? " disabled" : ""}"><input type="checkbox" data-pick-id="${id}" data-pick-cat-id="${catId}" data-pick-key="${escapeHtml(key)}"${has ? " disabled" : ""}> <span>${kind} · ${escapeHtml(noteLabel(item.url))}${note}${has ? " · đã có" : ""}</span></label>`;
+          }).join("");
+          return `<fieldset><legend><label class="pick-row cat"><input type="checkbox" data-pick-cat="${catId}"> ${escapeHtml(group.cat.name)} (${group.links.length})</label></legend>${rows}</fieldset>`;
+        }).join("");
+        syncPicker();
+      }
+
+      // Reflect pickChecked on the checkboxes (category / select-all states included) and the insert button.
+      function syncPicker() {
+        const itemBoxes = Array.from(elements.notePickList.querySelectorAll("input[data-pick-id]"));
+        for (const box of itemBoxes) {
+          if (box.disabled) pickChecked.delete(box.dataset.pickId);
+          box.checked = pickChecked.has(box.dataset.pickId);
+        }
+        for (const catBox of elements.notePickList.querySelectorAll("input[data-pick-cat]")) {
+          const boxes = itemBoxes.filter((box) => box.dataset.pickCatId === catBox.dataset.pickCat && !box.disabled);
+          const checked = boxes.filter((box) => box.checked).length;
+          catBox.disabled = !boxes.length;
+          catBox.checked = boxes.length > 0 && checked === boxes.length;
+          catBox.indeterminate = checked > 0 && checked < boxes.length;
+        }
+        const enabled = itemBoxes.filter((box) => !box.disabled);
+        const checkedAll = enabled.filter((box) => box.checked).length;
+        elements.notePickAll.checked = enabled.length > 0 && checkedAll === enabled.length;
+        elements.notePickAll.indeterminate = checkedAll > 0 && checkedAll < enabled.length;
+        elements.notePickStatus.textContent = itemBoxes.length ? `Đã chọn ${checkedAll} / ${enabled.length} link` : "";
+        elements.notePickInsert.textContent = checkedAll ? `Thêm ${checkedAll} link` : "Thêm link";
+        elements.notePickInsert.disabled = checkedAll === 0;
+      }
+
+      function setPickerOpen(open) {
+        elements.notePicker.classList.toggle("hidden", !open);
+        elements.notePickBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open) renderPicker();
+      }
+
+      function resetPicker() {
+        pickChecked.clear();
+        setPickerOpen(false);
+        updatePickCount();
+      }
+
+      function onPickChange(event) {
+        const box = event.target;
+        if (!(box instanceof HTMLInputElement)) return;
+        const itemBoxes = Array.from(elements.notePickList.querySelectorAll("input[data-pick-id]:not(:disabled)"));
+        let scope = null;
+        if (box === elements.notePickAll) scope = itemBoxes;
+        else if (box.dataset.pickCat) scope = itemBoxes.filter((item) => item.dataset.pickCatId === box.dataset.pickCat);
+        if (scope) {
+          for (const item of scope) {
+            if (box.checked) pickChecked.add(item.dataset.pickId);
+            else pickChecked.delete(item.dataset.pickId);
+          }
+        } else if (box.dataset.pickId) {
+          if (box.checked) pickChecked.add(box.dataset.pickId);
+          else pickChecked.delete(box.dataset.pickId);
+        }
+        syncPicker();
+      }
+
+      function insertPicked() {
+        const seen = bulkTextKeys();
+        const lines = [];
+        let skipped = 0;
+        for (const group of storeLinkGroups()) {
+          for (const { item, key } of group.links) {
+            if (!pickChecked.has(item.id)) continue;
+            if (seen.has(key)) {
+              skipped++;
+              continue;
+            }
+            seen.add(key);
+            lines.push(item.url);
+          }
+        }
+        if (lines.length) {
+          const current = elements.bulkText.value;
+          elements.bulkText.value = `${current}${current && !/\n$/.test(current) ? "\n" : ""}${lines.join("\n")}\n`;
+        }
+        elements.bulkHint.className = "hint";
+        elements.bulkHint.textContent = lines.length
+          ? `Đã thêm ${lines.length} link từ ghi chú (bỏ qua ${skipped} đã có).`
+          : `Không có link mới để thêm (bỏ qua ${skipped} đã có).`;
+        pickChecked.clear();
+        setPickerOpen(false);
+        elements.bulkText.focus();
+        elements.bulkText.setSelectionRange(elements.bulkText.value.length, elements.bulkText.value.length);
       }
 
       async function importNotes(file) {
@@ -552,7 +880,7 @@
         }
         saveNotes();
         renderNotes();
-        showMsg(`Đã nhập ${added} link, bỏ qua ${dupes} trùng, ${bad} lỗi`, bad ? "warn" : "ok");
+        notesFeedback(`Đã nhập ${added} link, bỏ qua ${dupes} trùng, ${bad} lỗi`, bad ? "warn" : "ok");
       }
 
       // ---- update check ----
@@ -2238,6 +2566,7 @@
         const ios = elements.quickIos.value.trim();
         elements.bulkText.value = play || ios ? `${play}\t${ios}`.trim() : "";
         elements.bulkHint.className = "hint warn hidden";
+        resetPicker();
         showStage("input");
         elements.modal.showModal();
         elements.bulkText.focus();
@@ -2931,52 +3260,102 @@
         if (state.reportBlob && state.reportName) downloadBlob(state.reportBlob, state.reportName);
       });
 
-      elements.noteSaveBtn.addEventListener("click", addNote);
-      for (const input of [elements.noteUrl, elements.noteText]) {
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            addNote();
-          }
-        });
-      }
+      elements.notesForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        addNote();
+      });
+      elements.noteUrl.addEventListener("input", () => elements.noteUrl.removeAttribute("aria-invalid"));
+      elements.notesCatSelect.addEventListener("change", () => {
+        const value = elements.notesCatSelect.value;
+        if (value === NEW_CAT_VALUE) addCategory();
+        else selectCategory(value);
+      });
       elements.notesList.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-note-action]");
         if (!btn) return;
         const action = btn.dataset.noteAction;
         const id = btn.dataset.noteId;
         if (action === "copy") copyNote(id);
-        else if (action === "open") openNote(id);
-        else if (action === "remove") removeNote(id);
+        else if (action === "menu") {
+          if (menuTrigger === btn) closeNotesMenu(true);
+          else openNotesMenu(btn, { type: "row", id }, rowMenuItems());
+        }
       });
-      elements.notesTabs.addEventListener("click", (event) => {
-        const tab = event.target.closest("button");
-        if (!tab) return;
-        if (tab.dataset.noteAction === "add-cat") addCategory();
-        else if (tab.dataset.catId) selectCategory(tab.dataset.catId);
+      elements.notesToast.addEventListener("click", (event) => {
+        if (!event.target.closest("button[data-note-action='undo']")) return;
+        const undo = undoAction;
+        if (undo) undo();
       });
-      elements.notesTabs.addEventListener("dblclick", (event) => {
-        if (event.target.closest("button[data-cat-id]")) renameCategory();
+      elements.notesMenuBtn.addEventListener("click", () => {
+        if (menuTrigger === elements.notesMenuBtn) closeNotesMenu(true);
+        else openNotesMenu(elements.notesMenuBtn, { type: "header" }, headerMenuItems());
       });
+      elements.notesMenu.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-menu-action]");
+        if (!btn) return;
+        const context = menuContext;
+        const action = btn.dataset.menuAction;
+        const arg = btn.dataset.menuArg;
+        closeNotesMenu(true);
+        runNotesMenuAction(context, action, arg);
+      });
+      elements.notesMenu.addEventListener("keydown", (event) => {
+        const buttons = Array.from(elements.notesMenu.querySelectorAll("button"));
+        const index = buttons.indexOf(document.activeElement);
+        let next = -1;
+        if (event.key === "ArrowDown") next = (index + 1) % buttons.length;
+        else if (event.key === "ArrowUp") next = (index - 1 + buttons.length) % buttons.length;
+        else if (event.key === "Home") next = 0;
+        else if (event.key === "End") next = buttons.length - 1;
+        else if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          closeNotesMenu(true);
+          return;
+        } else if (event.key === "Tab") {
+          closeNotesMenu(true);
+          return;
+        }
+        if (next >= 0) {
+          event.preventDefault();
+          buttons[next].focus();
+        }
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (elements.notesMenu.classList.contains("hidden")) return;
+        if (elements.notesMenu.contains(event.target) || (menuTrigger && menuTrigger.contains(event.target))) return;
+        closeNotesMenu();
+      });
+      window.addEventListener("resize", () => closeNotesMenu());
       elements.notesLauncher.addEventListener("click", () => setNotesOpen(true));
       elements.notesCloseBtn.addEventListener("click", () => setNotesOpen(false));
-      elements.notesRenameBtn.addEventListener("click", renameCategory);
-      elements.notesDeleteCatBtn.addEventListener("click", deleteCategory);
-      elements.notesExportBtn.addEventListener("click", exportNotes);
-      elements.notesImportBtn.addEventListener("click", () => elements.notesImportFile.click());
       elements.notesImportFile.addEventListener("change", async () => {
         const file = elements.notesImportFile.files && elements.notesImportFile.files[0];
         await importNotes(file);
         elements.notesImportFile.value = "";
       });
       document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && notesState.open && !document.querySelector("dialog[open]")) setNotesOpen(false);
+        if (event.key === "Escape" && notesState.open && !document.querySelector("dialog[open]") && elements.notesMenu.classList.contains("hidden")) setNotesOpen(false);
       });
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area === "local" && changes[NOTES_KEY] && changes[NOTES_KEY].newValue) {
+          if (JSON.stringify(changes[NOTES_KEY].newValue) === lastSavedJson) return;
+          closeNotesMenu();
           notesState = sanitizeState(changes[NOTES_KEY].newValue);
           renderNotes();
         }
+      });
+
+      elements.notePickBtn.addEventListener("click", () => setPickerOpen(elements.notePicker.classList.contains("hidden")));
+      elements.notePickClose.addEventListener("click", () => {
+        setPickerOpen(false);
+        elements.notePickBtn.focus();
+      });
+      elements.notePickInsert.addEventListener("click", insertPicked);
+      elements.notePickAll.addEventListener("change", onPickChange);
+      elements.notePickList.addEventListener("change", onPickChange);
+      elements.bulkText.addEventListener("input", () => {
+        if (!elements.notePicker.classList.contains("hidden")) renderPicker();
       });
 
       elements.checkUpdateBtn.addEventListener("click", () => checkForUpdate({ force: true }));

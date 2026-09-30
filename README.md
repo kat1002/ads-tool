@@ -34,7 +34,8 @@ Bấm biểu tượng **Ads Tool** trên thanh công cụ, tool mở trong một
 
 ![Giao diện Ads Tool](docs/4-tool.png)
 
-- **Ghi chú link:** widget nổi ở góc dưới bên phải, lưu link kèm ghi chú (tuỳ chọn) trên máy bằng `chrome.storage.local`, chia theo danh mục (tab) như từng game hoặc thể loại. Hỗ trợ mở, copy, xoá, đổi tên/xoá danh mục, xuất và nhập file `.txt` để chuyển sang máy khác.
+- **Ghi chú link:** nút Link nổi ở góc dưới bên phải mở widget lưu link trên máy bằng `chrome.storage.local`, chia theo danh mục (chọn ở ô Danh mục, hoặc chọn "+ Danh mục mới…"). Dán link vào ô rồi nhấn Enter để lưu; gõ ghi chú sau link, cách nhau bằng dấu cách. Bấm vào một dòng để copy link, nút ⋯ trên dòng để mở, sửa ghi chú, chuyển danh mục hoặc xoá. Nút ⋯ trên đầu widget để đổi tên/xoá danh mục, xuất và nhập file `.txt` để chuyển sang máy khác. Xoá link hoặc danh mục có nút **Hoàn tác** trong vài giây.
+- **Từ ghi chú:** ở bước 1 của hộp thoại thêm link, bấm **Từ ghi chú** để chọn các link Google Play / App Store đã lưu (theo danh mục hoặc chọn tất cả) và chèn vào ô danh sách. Link đã có trong ô được đánh dấu "đã có" và không bị thêm trùng.
 
 ## Cập nhật
 
