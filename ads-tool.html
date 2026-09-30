@@ -119,9 +119,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     .meta-box { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
     .meta { color: var(--muted); font-size: 12px; }
     .source-list { display: grid; gap: 4px; margin-top: 6px; }
-    .source-line { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
-    .source-line span:first-child { word-break: break-all; }
-    .source-line span:last-child { color: var(--muted); white-space: nowrap; }
+    .source-line { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+    .source-line .source-name { flex: 1; word-break: break-all; }
+    .source-line .source-size { color: var(--muted); white-space: nowrap; }
+    .source-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
     /* step 2: two-part store field */
     .pair-field { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
@@ -937,14 +938,31 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         }
 
         const totalBytes = state.sources.reduce((sum, source) => sum + source.file.size, 0);
-        const lines = state.sources.map((source) => (
-          `<div class="source-line"><span>${escapeHtml(source.file.name)}</span><span>${formatBytes(source.file.size)}</span></div>`
+        const dis = state.busy ? " disabled" : "";
+        const lines = state.sources.map((source, index) => (
+          `<div class="source-line"><span class="source-name">${escapeHtml(source.file.name)}</span><span class="source-size">${formatBytes(source.file.size)}</span><button class="small" type="button" data-remove-index="${index}"${dis} aria-label="Xoá ${escapeHtml(source.file.name)}">Xoá</button></div>`
         )).join("");
 
         elements.fileMeta.innerHTML = [
-          `<div class="meta"><strong>${state.sources.length}</strong> file · ${formatBytes(totalBytes)}</div>`,
+          `<div class="meta source-head"><span><strong>${state.sources.length}</strong> file · ${formatBytes(totalBytes)}</span><button class="small" type="button" data-clear-all="1"${dis}>Xoá tất cả</button></div>`,
           `<div class="source-list">${lines}</div>`
         ].join("");
+      }
+
+      function removeSource(index) {
+        if (state.busy || !state.sources[index]) return;
+        clearOutputState();
+        state.sources.splice(index, 1);
+        updateFileMeta();
+        refreshAll();
+      }
+
+      function clearSources() {
+        if (state.busy) return;
+        clearOutputState();
+        state.sources = [];
+        updateFileMeta();
+        refreshAll();
       }
 
       function clearOutputState() {
@@ -2405,6 +2423,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       function setBusy(busy) {
         state.busy = busy;
+        updateFileMeta();
         elements.addVariantBtn.disabled = busy;
         elements.openAddBtn.disabled = busy;
         setButtonsEnabled();
@@ -2575,6 +2594,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         event.preventDefault();
         elements.dropZone.classList.remove("dragover");
         handleFallbackSelection(event.dataTransfer.files);
+      });
+      elements.fileMeta.addEventListener("click", (event) => {
+        const btn = event.target.closest("button");
+        if (!btn) return;
+        if (btn.dataset.clearAll) clearSources();
+        else if (btn.dataset.removeIndex !== undefined) removeSource(Number(btn.dataset.removeIndex));
       });
       elements.fileInput.addEventListener("change", (event) => {
         handleFallbackSelection(event.target.files);
