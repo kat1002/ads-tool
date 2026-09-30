@@ -75,6 +75,7 @@
         notesCloseBtn: $("notesCloseBtn"),
         versionBadge: $("versionBadge"),
         checkUpdateBtn: $("checkUpdateBtn"),
+        linkDirBtn: $("linkDirBtn"),
         updateStatus: $("updateStatus"),
         updateBanner: $("updateBanner"),
         updateText: $("updateText"),
@@ -558,10 +559,13 @@
       const UPDATE_KEY = "adsToolUpdateCheck";
       const REPO = "kat1002/ads-tool";
       const CHECK_INTERVAL_MS = 6 * 3600 * 1000;
-      const ASSET_NAME = "ads-tool-extension.zip";
+      const IS_EXE = Boolean(window.ADS_TOOL_EXE);
+      const ASSET_NAME = IS_EXE ? "AdsTool.exe" : "ads-tool-extension.zip";
+      const HELPER_BASE = "http://127.0.0.1:8765";
       const ALLOWED_FILES = ["manifest.json", "background.js", "ads-tool.html", "ads-tool.js", "jszip.min.js"];
       const ICON_PATH_RE = /^icons\/[A-Za-z0-9_.-]+\.png$/;
       let latestRelease = null;
+      let linkedDir = null;
 
       function currentVersion() {
         return (typeof chrome !== "undefined" && chrome.runtime?.getManifest?.().version) || "0.0.0";
@@ -643,11 +647,11 @@
           }
           renderUpdate(latest);
           const isNew = compareVersions(latest.version, currentVersion()) > 0;
-          elements.updateStatus.textContent = force && !isNew ? "Đã là bản mới nhất" : "";
+          elements.updateStatus.textContent = force && !isNew ? "Đã là bản mới nhất" : linkStatusText();
         } catch (e) {
           try {
             if (cached && cached.latest) renderUpdate(cached.latest);
-            elements.updateStatus.textContent = force ? `Không kiểm tra được: ${e.message}` : "";
+            elements.updateStatus.textContent = force ? `Không kiểm tra được: ${e.message}` : linkStatusText();
           } catch (e2) {
             // never throw
           }
@@ -683,31 +687,36 @@
         });
       }
 
-      async function getExtensionDir() {
-        let dir = null;
+      function linkStatusText() {
+        if (IS_EXE) return "";
+        return linkedDir ? `Thư mục: ${linkedDir.name}` : "Chưa liên kết thư mục";
+      }
+
+      async function getStoredDir() {
         const stored = await idbGet("extDir").catch(() => null);
-        if (stored) {
-          const opts = { mode: "readwrite" };
-          let perm = await stored.queryPermission(opts);
-          if (perm !== "granted") perm = await stored.requestPermission(opts);
-          if (perm === "granted") dir = stored;
-          else await idbSet("extDir", null).catch(() => {});
-        }
-        if (!dir) {
-          if (typeof window.showDirectoryPicker !== "function") {
-            throw new Error("Trình duyệt không hỗ trợ chọn thư mục");
-          }
-          dir = await window.showDirectoryPicker({ id: "ads-tool", mode: "readwrite" });
-        }
+        return stored || null;
+      }
+
+      async function verifyDir(dir) {
         try {
           const manifestFile = await (await dir.getFileHandle("manifest.json")).getFile();
           const manifest = JSON.parse(await manifestFile.text());
           if (manifest.name !== "Ads Tool" || manifest.version !== currentVersion()) throw new Error("mismatch");
         } catch (e) {
           await idbSet("extDir", null).catch(() => {});
+          linkedDir = null;
           throw new Error("Thư mục không đúng: cần thư mục chứa manifest.json của Ads Tool đang chạy");
         }
+      }
+
+      async function pickDir() {
+        if (typeof window.showDirectoryPicker !== "function") {
+          throw new Error("Trình duyệt không hỗ trợ chọn thư mục");
+        }
+        const dir = await window.showDirectoryPicker({ id: "ads-tool", mode: "readwrite" });
+        await verifyDir(dir);
         await idbSet("extDir", dir);
+        linkedDir = dir;
         return dir;
       }
 
@@ -756,22 +765,56 @@
         }
       }
 
+      async function helperUpdate(latest) {
+        const res = await fetch(`${HELPER_BASE}/api/update`, { method: "POST" });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Cập nhật thất bại");
+        elements.updateStatus.textContent = "Đang khởi động lại…";
+        for (let i = 0; i < 30; i += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          try {
+            const v = await (await fetch(`${HELPER_BASE}/api/version`, { cache: "no-store" })).json();
+            if (v.version === latest.version) {
+              location.reload();
+              return;
+            }
+          } catch (e) {
+            // helper restarting
+          }
+        }
+        throw new Error("Hết thời gian chờ khởi động lại");
+      }
+
       async function oneClickUpdate(latest) {
         if (!latest) return;
-        const buttons = [elements.updateBtn, elements.manualUpdateBtn, elements.checkUpdateBtn];
+        const buttons = [elements.updateBtn, elements.manualUpdateBtn, elements.checkUpdateBtn, elements.linkDirBtn];
         for (const btn of buttons) btn.disabled = true;
         try {
-          const dir = await getExtensionDir(); // must stay the first await (user gesture)
+          if (IS_EXE) {
+            elements.updateStatus.textContent = `Đang cập nhật v${latest.version}…`;
+            await helperUpdate(latest);
+            return;
+          }
+          let dir = linkedDir;
+          if (dir) {
+            // must stay the first await (user gesture); no prompt if already granted
+            const perm = await dir.requestPermission({ mode: "readwrite" });
+            if (perm !== "granted") throw new Error("Chưa được cấp quyền ghi thư mục");
+            await verifyDir(dir);
+          } else {
+            dir = await pickDir();
+          }
           elements.updateStatus.textContent = `Đang tải v${latest.version}…`;
           const entries = await downloadAndValidate(latest);
           elements.updateStatus.textContent = "Đang ghi file…";
           await writeFiles(dir, entries);
           await chrome.storage.local.set({ adsToolReopenAfterUpdate: latest.version });
+          await chrome.storage.local.remove(UPDATE_KEY).catch(() => {});
           elements.updateStatus.textContent = "Xong, đang khởi động lại…";
           chrome.runtime.reload();
         } catch (e) {
           if (e && e.name === "AbortError") {
-            elements.updateStatus.textContent = "";
+            elements.updateStatus.textContent = linkStatusText();
           } else {
             elements.updateStatus.textContent = `Không tự cập nhật được: ${e && e.message}. Dùng Tải thủ công.`;
             manualUpdate(latest);
@@ -784,7 +827,7 @@
       function manualUpdate(latest) {
         if (!latest) return;
         window.open(latest.assetUrl, "_blank", "noopener");
-        elements.updateHelp.classList.remove("hidden");
+        if (!IS_EXE) elements.updateHelp.classList.remove("hidden");
       }
 
       // ---- step 3: variant cards ----
@@ -2943,6 +2986,22 @@
       elements.manualUpdateBtn.addEventListener("click", () => {
         if (latestRelease) manualUpdate(latestRelease);
       });
+      elements.linkDirBtn.addEventListener("click", async () => {
+        try {
+          await pickDir();
+          elements.updateStatus.textContent = linkStatusText();
+        } catch (e) {
+          elements.updateStatus.textContent = e && e.name === "AbortError" ? linkStatusText() : `Không liên kết được: ${e && e.message}`;
+        }
+      });
+      if (IS_EXE) {
+        elements.linkDirBtn.classList.add("hidden");
+      } else {
+        getStoredDir().then((dir) => {
+          linkedDir = dir;
+          if (!elements.updateStatus.textContent) elements.updateStatus.textContent = linkStatusText();
+        });
+      }
 
       addVariantRow();
       updateFileMeta();
