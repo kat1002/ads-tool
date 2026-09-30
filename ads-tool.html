@@ -277,7 +277,22 @@
         <span id="versionBadge" class="badge">v…</span>
         <button id="checkUpdateBtn" class="small" type="button">Kiểm tra</button>
         <button id="linkDirBtn" class="small" type="button" title="Chọn thư mục chứa manifest.json của Ads Tool">Liên kết thư mục</button>
+        <button id="setupUpdaterBtn" class="small hidden" type="button" aria-expanded="false" aria-controls="updaterHelp" title="Cài một lần để nút Cập nhật tự ghi đè file">Cài tự cập nhật</button>
         <span id="updateStatus" class="hint"></span>
+      </div>
+      <div id="updaterHelp" class="update-banner hidden" role="region" aria-label="Hướng dẫn cài tự cập nhật">
+        <div class="hint">
+          <b>Cài tự cập nhật (một lần, không cần quyền admin):</b>
+          <ol>
+            <li>Mở thư mục Ads Tool đang dùng (thư mục chứa <code>manifest.json</code>).</li>
+            <li>Cài Python 3 nếu máy chưa có (python.org/downloads).</li>
+            <li>Bấm đúp <code>install-updater.bat</code>.</li>
+            <li>Nếu được hỏi ID, dán ID bên dưới vào cửa sổ đó.</li>
+            <li>Tải lại trang này.</li>
+          </ol>
+          <span>ID extension: <code id="extIdText"></code></span>
+          <button id="copyExtIdBtn" class="small" type="button" aria-label="Sao chép ID extension">Sao chép</button>
+        </div>
       </div>
       <div id="updateBanner" class="update-banner hidden">
         <span id="updateText"></span>
@@ -286,9 +301,10 @@
         <a id="updateNotesLink" target="_blank" rel="noopener">Xem thay đổi</a>
         <div id="updateNotes" class="update-notes hidden"></div>
         <div id="updateHelp" class="hint hidden">
+          <p style="margin:0 0 4px">Cập nhật thủ công (hoặc bấm <b>Cài tự cập nhật</b> để lần sau chỉ cần một cú bấm):</p>
           <ol>
             <li>Giải nén file zip vừa tải, đè lên thư mục Ads Tool cũ (thư mục chứa <code>manifest.json</code>).</li>
-            <li>Mở <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>).</li>
+            <li>Mở <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>, Brave: <code>brave://extensions</code>).</li>
             <li>Bấm <b>Reload</b> ở Ads Tool.</li>
           </ol>
         </div>

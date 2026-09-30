@@ -88,7 +88,11 @@
         manualUpdateBtn: $("manualUpdateBtn"),
         updateNotesLink: $("updateNotesLink"),
         updateNotes: $("updateNotes"),
-        updateHelp: $("updateHelp")
+        updateHelp: $("updateHelp"),
+        setupUpdaterBtn: $("setupUpdaterBtn"),
+        updaterHelp: $("updaterHelp"),
+        extIdText: $("extIdText"),
+        copyExtIdBtn: $("copyExtIdBtn")
       };
 
       const ICON_SIZE = 512;
@@ -890,8 +894,12 @@
       const IS_EXE = Boolean(window.ADS_TOOL_EXE);
       const ASSET_NAME = IS_EXE ? "AdsTool.exe" : "ads-tool-extension.zip";
       const HELPER_BASE = "http://127.0.0.1:8765";
-      const ALLOWED_FILES = ["manifest.json", "background.js", "ads-tool.html", "ads-tool.js", "jszip.min.js"];
+      const ALLOWED_FILES = ["manifest.json", "background.js", "ads-tool.html", "ads-tool.js", "jszip.min.js", "install-updater.bat", "uninstall-updater.bat"];
       const ICON_PATH_RE = /^icons\/[A-Za-z0-9_.-]+\.png$/;
+      const UPDATER_PATH_RE = /^updater\/(host|install|uninstall)\.py$/;
+      const NATIVE_HOST = "com.kat1002.adstool.updater";
+      let nativeReady = false;
+      let nativeState = "unknown"; // unknown | ready | missing | forbidden | error | unsupported
       let latestRelease = null;
       let linkedDir = null;
 
@@ -915,7 +923,115 @@
       function isAllowedPath(path) {
         if (typeof path !== "string" || !path) return false;
         if (path.includes("..") || path.includes("\\") || path.includes(":") || path.startsWith("/")) return false;
-        return ALLOWED_FILES.includes(path) || ICON_PATH_RE.test(path);
+        return ALLOWED_FILES.includes(path) || ICON_PATH_RE.test(path) || UPDATER_PATH_RE.test(path);
+      }
+
+      function isOptionalPath(path) {
+        return path.startsWith("updater/") || path.endsWith(".bat");
+      }
+
+      function nativeCall(msg, timeoutMs) {
+        const ms = timeoutMs || (msg && msg.cmd === "update" ? 120000 : 8000);
+        return new Promise((resolve, reject) => {
+          if (typeof chrome === "undefined" || typeof chrome.runtime?.sendNativeMessage !== "function") {
+            reject(new Error("Trình duyệt không hỗ trợ native messaging"));
+            return;
+          }
+          let done = false;
+          const timer = setTimeout(() => {
+            if (done) return;
+            done = true;
+            reject(new Error("Hết thời gian chờ trình cập nhật"));
+          }, ms);
+          try {
+            chrome.runtime.sendNativeMessage(NATIVE_HOST, msg, (res) => {
+              if (done) return;
+              done = true;
+              clearTimeout(timer);
+              const err = chrome.runtime.lastError;
+              if (err) reject(new Error(err.message || "Lỗi native messaging"));
+              else resolve(res || null);
+            });
+          } catch (e) {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            reject(e instanceof Error ? e : new Error(String(e)));
+          }
+        });
+      }
+
+      function nativeErrorState(message) {
+        const text = String(message || "").toLowerCase();
+        if (text.includes("forbidden")) return "forbidden";
+        if (text.includes("not found") || text.includes("host not found")) return "missing";
+        return "error";
+      }
+
+      const NATIVE_CODE_MESSAGES = {
+        BAD_VERSION: "Phiên bản không hợp lệ",
+        DOWNLOAD: "Không tải được bản cập nhật từ GitHub",
+        HASH: "File tải về không khớp mã kiểm tra (SHA-256)",
+        ZIP: "Gói cập nhật bị lỗi",
+        MANIFEST: "Gói cập nhật không khớp phiên bản",
+        WRITE: "Không ghi được file vào thư mục",
+        NOT_ADS_TOOL: "Thư mục cài đặt không phải Ads Tool, hãy chạy lại install-updater.bat",
+        ORIGIN: "Trình cập nhật không nhận extension này, hãy chạy lại install-updater.bat"
+      };
+
+      function nativeFailureText(res, e) {
+        if (res && res.ok === false) {
+          return NATIVE_CODE_MESSAGES[res.code] || res.error || "Trình cập nhật báo lỗi";
+        }
+        if (res == null && !e) return "Trình cập nhật không phản hồi";
+        return (e && e.message) || "Lỗi trình cập nhật";
+      }
+
+      async function detectNative() {
+        if (IS_EXE) return;
+        try {
+          const res = await nativeCall({ cmd: "ping" }, 8000);
+          if (res && res.ok) {
+            nativeReady = true;
+            nativeState = "ready";
+          } else {
+            nativeState = "error";
+          }
+        } catch (e) {
+          nativeReady = false;
+          nativeState = typeof chrome === "undefined" || typeof chrome.runtime?.sendNativeMessage !== "function"
+            ? "unsupported"
+            : nativeErrorState(e && e.message);
+        }
+        applyUpdaterUi();
+      }
+
+      function pickerAvailable() {
+        return typeof window.showDirectoryPicker === "function";
+      }
+
+      async function pickerMissingMessage() {
+        let brave = false;
+        try {
+          brave = Boolean(navigator.brave && (await navigator.brave.isBrave()));
+        } catch (e) {
+          brave = false;
+        }
+        return brave
+          ? "Brave tắt tính năng chọn thư mục. Chạy install-updater.bat (bấm Cài tự cập nhật) hoặc bật brave://flags/#file-system-access-api rồi khởi động lại Brave."
+          : "Trình duyệt không hỗ trợ chọn thư mục. Bấm Cài tự cập nhật để cài trình cập nhật (install-updater.bat).";
+      }
+
+      function applyUpdaterUi() {
+        if (IS_EXE) return;
+        elements.linkDirBtn.classList.toggle("hidden", nativeReady || !pickerAvailable());
+        elements.setupUpdaterBtn.classList.toggle("hidden", nativeReady);
+        if (nativeReady) elements.updaterHelp.classList.add("hidden");
+        if (nativeState === "forbidden" && !elements.updateStatus.textContent) {
+          elements.updateStatus.textContent = "Trình cập nhật chưa nhận extension này, hãy chạy lại install-updater.bat";
+        } else if (!elements.updateStatus.textContent || nativeReady) {
+          elements.updateStatus.textContent = linkStatusText();
+        }
       }
 
       async function fetchLatestRelease() {
@@ -1017,6 +1133,8 @@
 
       function linkStatusText() {
         if (IS_EXE) return "";
+        if (nativeReady) return "Tự cập nhật: đã cài";
+        if (nativeState === "forbidden") return "Tự cập nhật: cần chạy lại install-updater.bat";
         return linkedDir ? `Thư mục: ${linkedDir.name}` : "Chưa liên kết thư mục";
       }
 
@@ -1039,7 +1157,7 @@
 
       async function pickDir() {
         if (typeof window.showDirectoryPicker !== "function") {
-          throw new Error("Trình duyệt không hỗ trợ chọn thư mục");
+          throw new Error(await pickerMissingMessage());
         }
         const dir = await window.showDirectoryPicker({ id: "ads-tool", mode: "readwrite" });
         await verifyDir(dir);
@@ -1077,19 +1195,26 @@
       async function writeFiles(dir, entries) {
         const ordered = entries.filter((e) => e.path !== "manifest.json")
           .concat(entries.filter((e) => e.path === "manifest.json"));
-        let iconsDir = null;
+        const subDirs = {};
         for (const { path, blob } of ordered) {
-          let parent = dir;
-          let name = path;
-          if (path.startsWith("icons/")) {
-            if (!iconsDir) iconsDir = await dir.getDirectoryHandle("icons", { create: true });
-            parent = iconsDir;
-            name = path.slice("icons/".length);
+          try {
+            let parent = dir;
+            let name = path;
+            const slash = path.indexOf("/");
+            if (slash > 0) {
+              const sub = path.slice(0, slash);
+              if (!subDirs[sub]) subDirs[sub] = await dir.getDirectoryHandle(sub, { create: true });
+              parent = subDirs[sub];
+              name = path.slice(slash + 1);
+            }
+            const handle = await parent.getFileHandle(name, { create: true });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+          } catch (e) {
+            if (isOptionalPath(path)) console.warn("Bỏ qua file không ghi được:", path, e);
+            else throw e;
           }
-          const handle = await parent.getFileHandle(name, { create: true });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
         }
       }
 
@@ -1121,6 +1246,39 @@
           if (IS_EXE) {
             elements.updateStatus.textContent = `Đang cập nhật v${latest.version}…`;
             await helperUpdate(latest);
+            return;
+          }
+          if (nativeReady) {
+            elements.updateStatus.textContent = `Đang cập nhật v${latest.version}…`;
+            let failure = "";
+            try {
+              const res = await nativeCall({ cmd: "update", version: latest.version }, 120000);
+              if (res && res.ok) {
+                await chrome.storage.local.set({ adsToolReopenAfterUpdate: latest.version });
+                await chrome.storage.local.remove(UPDATE_KEY).catch(() => {});
+                elements.updateStatus.textContent = "Xong, đang khởi động lại…";
+                chrome.runtime.reload();
+                return;
+              }
+              failure = nativeFailureText(res, null);
+            } catch (e) {
+              failure = nativeFailureText(null, e);
+              const state = nativeErrorState(e && e.message);
+              if (state === "forbidden" || state === "missing") {
+                nativeReady = false;
+                nativeState = state;
+                applyUpdaterUi();
+              }
+            }
+            if (!pickerAvailable() && !linkedDir) {
+              elements.updateStatus.textContent = `Tự cập nhật lỗi: ${failure}. Dùng Tải thủ công.`;
+              manualUpdate(latest);
+              return;
+            }
+            elements.updateStatus.textContent = `Tự cập nhật lỗi: ${failure}. Thử cách khác…`;
+          } else if (!pickerAvailable() && !linkedDir) {
+            elements.updateStatus.textContent = `${await pickerMissingMessage()} Hoặc dùng Tải thủ công.`;
+            manualUpdate(latest);
             return;
           }
           let dir = linkedDir;
@@ -3375,11 +3533,35 @@
       });
       if (IS_EXE) {
         elements.linkDirBtn.classList.add("hidden");
+        elements.setupUpdaterBtn.classList.add("hidden");
+        elements.updaterHelp.classList.add("hidden");
       } else {
+        try {
+          elements.extIdText.textContent = chrome.runtime.id || "";
+        } catch (e) {
+          elements.extIdText.textContent = "";
+        }
+        elements.setupUpdaterBtn.classList.remove("hidden");
+        elements.setupUpdaterBtn.addEventListener("click", () => {
+          const open = elements.updaterHelp.classList.toggle("hidden") === false;
+          elements.setupUpdaterBtn.setAttribute("aria-expanded", String(open));
+        });
+        elements.copyExtIdBtn.addEventListener("click", async () => {
+          const id = elements.extIdText.textContent;
+          try {
+            await navigator.clipboard.writeText(id);
+            elements.copyExtIdBtn.textContent = "Đã chép";
+          } catch (e) {
+            elements.copyExtIdBtn.textContent = "Không chép được";
+          }
+          setTimeout(() => { elements.copyExtIdBtn.textContent = "Sao chép"; }, 1500);
+        });
+        elements.linkDirBtn.classList.toggle("hidden", !pickerAvailable());
         getStoredDir().then((dir) => {
           linkedDir = dir;
           if (!elements.updateStatus.textContent) elements.updateStatus.textContent = linkStatusText();
         });
+        detectNative();
       }
 
       addVariantRow();

@@ -41,16 +41,32 @@ Bấm biểu tượng **Ads Tool** trên thanh công cụ, tool mở trong một
 
 Phiên bản hiện tại hiển thị ở đầu trang Ads Tool. Khi có bản release mới trên GitHub, một banner cập nhật sẽ xuất hiện.
 
-- **Cập nhật:** tự tải bản mới và ghi đè các file. Lần đầu bạn chọn thư mục đang cài Ads Tool (thư mục chứa `manifest.json`); trình duyệt có thể hỏi cấp quyền lại mỗi phiên làm việc.
+- **Cập nhật:** nếu đã [cài tự cập nhật](#cài-tự-cập-nhật-một-lần) thì tự làm hết mọi thứ. Nếu chưa, tự tải bản mới và ghi đè các file. Lần đầu bạn chọn thư mục đang cài Ads Tool (thư mục chứa `manifest.json`); trình duyệt có thể hỏi cấp quyền lại mỗi phiên làm việc.
 - **Tải thủ công:** cách dự phòng. Tải zip mới, giải nén đè lên thư mục cũ, mở `chrome://extensions` (Edge: `edge://extensions`) rồi bấm **Reload** ở Ads Tool.
 - Nếu trình duyệt từ chối thư mục đã chọn (thư mục hệ thống, ví dụ nằm trong `AppData`), hãy chuyển extension sang chỗ khác như `Documents\AdsTool`, rồi Load unpacked lại từ thư mục đó.
 - Lần nâng cấp đầu tiên lên 1.0.3 phải làm thủ công, vì bản này thêm quyền mới.
+
+## Cài tự cập nhật (một lần)
+
+Để nút **Cập nhật** tự làm hết (tải bản mới, ghi đè file, tải lại extension và mở lại tool) mà không cần chọn thư mục, cài một lần "trình cập nhật" nhỏ. Không cần quyền admin, không có tiến trình nào chạy nền.
+
+1. Cài **Python 3** từ https://www.python.org/downloads/ (khi cài, tick **Add python.exe to PATH**).
+2. Trong thư mục cài Ads Tool, bấm đúp **`install-updater.bat`**. Nếu Windows SmartScreen cảnh báo, chọn **More info** → **Run anyway**. Nếu script không tự tìm được ID extension, dán ID hiển thị trong hướng dẫn "Cài tự cập nhật" của tool vào cửa sổ.
+3. Tải lại (reload) extension ở `chrome://extensions` (Edge: `edge://extensions`), rồi mở lại Ads Tool.
+
+Từ đó bấm **Cập nhật** là xong. Gỡ bằng `uninstall-updater.bat`.
+
+- **Brave:** Brave tắt sẵn chức năng chọn thư mục, nên cách này là cách nên dùng. Cách khác: bật `brave://flags/#file-system-access-api`, khởi động lại Brave rồi dùng nút chọn thư mục như cũ (Brave sẽ hỏi cấp quyền mỗi phiên).
+- **Đang dùng 1.0.5 trở xuống:** cập nhật lên 1.0.6 một lần thủ công: tải `ads-tool-extension.zip`, giải nén đè lên thư mục cũ, bấm **Reload** ở Ads Tool, rồi bấm đúp `install-updater.bat`. Từ 1.0.6 trở đi chỉ cần một cú bấm.
+- **Đổi hoặc di chuyển thư mục cài:** chạy lại `install-updater.bat`.
 
 ## Lỗi thường gặp
 
 - **Không thấy nút Load unpacked:** chưa bật Developer mode (bước 2).
 - **Chọn thư mục báo lỗi manifest:** bạn đang chọn nhầm thư mục. Phải chọn thư mục chứa trực tiếp file `manifest.json`, không phải file zip và không phải thư mục cha.
 - **Extension biến mất sau khi khởi động lại trình duyệt:** thư mục đã bị xoá hoặc di chuyển. Đặt lại thư mục ở chỗ cố định rồi Load unpacked lại.
+- **"Access to the specified native messaging host is forbidden":** extension này chạy từ thư mục khác với thư mục đã cài trình cập nhật. Chạy lại `install-updater.bat` trong đúng thư mục đang Load unpacked, rồi reload extension.
+- **`install-updater.bat` báo thiếu Python:** cài Python 3 từ https://www.python.org/downloads/ (tick **Add python.exe to PATH**) rồi chạy lại. Nếu SmartScreen chặn file `.bat`, chọn **More info** → **Run anyway**.
 - **Máy công ty chặn cài extension:** liên hệ IT hoặc dùng `AdsTool.exe` (Windows).
 
 ## Development

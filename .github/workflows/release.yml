@@ -21,16 +21,22 @@ jobs:
             exit 1
           fi
       - name: Zip extension
-        run: zip -r ads-tool-extension.zip manifest.json background.js ads-tool.html ads-tool.js jszip.min.js icons
+        run: |
+          zip -r ads-tool-extension.zip manifest.json background.js ads-tool.html ads-tool.js jszip.min.js icons             install-updater.bat uninstall-updater.bat             updater/updater-host.bat updater/host.py updater/install.py updater/uninstall.py
+          sha256sum ads-tool-extension.zip | cut -d' ' -f1 > ads-tool-extension.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: ads-tool-extension
-          path: ads-tool-extension.zip
+          path: |
+            ads-tool-extension.zip
+            ads-tool-extension.zip.sha256
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ads-tool-extension.zip
+          files: |
+            ads-tool-extension.zip
+            ads-tool-extension.zip.sha256
 
   windows-exe:
     needs: package
