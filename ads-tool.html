@@ -105,6 +105,11 @@
     .source-line .source-name { flex: 1; word-break: break-all; }
     .source-line .source-size { color: var(--muted); white-space: nowrap; }
     .source-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .notes-form { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+    .notes-list { display: flex; flex-direction: column; gap: 6px; }
+    .note-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-top: 1px solid var(--border); padding-top: 6px; font-size: 12px; }
+    .note-line .note-text { color: var(--muted); flex-basis: 100%; word-break: break-word; }
+    .note-line .grow { flex: 1; }
 
     /* step 2: two-part store field */
     .pair-field { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
@@ -290,6 +295,15 @@
         <details id="logDetails" class="log-box">
           <summary>Log chi tiết</summary>
           <div id="log" class="log">Sẵn sàng.</div>
+        </details>
+        <details id="notesDetails" class="log-box notes-box" open>
+          <summary>Ghi chú link <span id="notesCount" class="count"></span></summary>
+          <div class="notes-form">
+            <input id="noteUrl" type="text" placeholder="Dán link (Play, App Store, hoặc URL bất kỳ)" autocomplete="off" spellcheck="false" aria-label="Link cần lưu">
+            <input id="noteText" type="text" placeholder="Ghi chú (tuỳ chọn)" autocomplete="off" aria-label="Ghi chú">
+            <div class="actions"><button id="noteSaveBtn" class="primary small" type="button">Lưu</button></div>
+          </div>
+          <div id="notesList" class="notes-list"></div>
         </details>
       </aside>
     </div>

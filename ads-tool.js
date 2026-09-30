@@ -57,7 +57,12 @@
         confirmBtn: $("confirmBtn"),
         checkBody: $("checkBody"),
         checkNotice: $("checkNotice"),
-        checkSummary: $("checkSummary")
+        checkSummary: $("checkSummary"),
+        noteUrl: $("noteUrl"),
+        noteText: $("noteText"),
+        noteSaveBtn: $("noteSaveBtn"),
+        notesList: $("notesList"),
+        notesCount: $("notesCount")
       };
 
       const ICON_SIZE = 512;
@@ -246,6 +251,111 @@
         const apple = parseAppStore(value);
         if (!apple) return `<span class="chip-link bad" title="${escapeHtml(value)}">${label}link không hợp lệ</span>`;
         return `<a class="chip-link ios" href="${escapeHtml(cleanAppStoreUrl(value))}" target="_blank" rel="noopener" title="${escapeHtml(value)}">${label}${escapeHtml(apple.country.toUpperCase())} · id${escapeHtml(apple.id)}</a>`;
+      }
+
+      // ---- link notes (persisted) ----
+      const NOTES_KEY = "adsToolLinkNotes";
+      let notes = [];
+
+      async function loadNotes() {
+        try {
+          const stored = await chrome.storage.local.get(NOTES_KEY);
+          notes = Array.isArray(stored[NOTES_KEY]) ? stored[NOTES_KEY] : [];
+          renderNotes();
+        } catch (e) {
+          showMsg(`Không đọc được ghi chú: ${e.message}`, "err");
+        }
+      }
+
+      function saveNotes() {
+        try {
+          Promise.resolve(chrome.storage.local.set({ [NOTES_KEY]: notes })).catch((e) => {
+            showMsg(`Không lưu được ghi chú: ${e.message}`, "err");
+          });
+        } catch (e) {
+          showMsg(`Không lưu được ghi chú: ${e.message}`, "err");
+        }
+      }
+
+      function normalizeNoteUrl(raw) {
+        const value = String(raw || "").trim();
+        if (!value) return null;
+        const kind = classifyCell(value);
+        const cleaned = kind === "play" ? cleanPlayUrl(value) : kind === "ios" ? cleanAppStoreUrl(value) : value;
+        return /^https?:\/\/\S+$/i.test(cleaned) ? cleaned : null;
+      }
+
+      function renderNotes() {
+        elements.notesCount.textContent = notes.length || "";
+        if (!notes.length) {
+          elements.notesList.innerHTML = '<div class="meta">Chưa có link nào được lưu.</div>';
+          return;
+        }
+        const head = `<div class="meta source-head"><span><strong>${notes.length}</strong> link</span><span><button class="small" type="button" data-note-action="export">Xuất .txt</button> <button class="small danger" type="button" data-note-action="clear">Xoá tất cả</button></span></div>`;
+        const lines = notes.map((item) => {
+          const kind = classifyCell(item.url);
+          const chip = kind
+            ? linkChip(kind, item.url, true)
+            : `<a class="chip-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a>`;
+          const id = escapeHtml(item.id);
+          const text = item.note ? `<div class="note-text">${escapeHtml(item.note)}</div>` : "";
+          return `<div class="note-line">${chip}<span class="grow"></span>`
+            + `<button class="small" type="button" data-note-action="copy" data-note-id="${id}">Copy</button> `
+            + `<button class="small" type="button" data-note-action="open" data-note-id="${id}">Mở</button> `
+            + `<button class="small" type="button" data-note-action="remove" data-note-id="${id}">Xoá</button>`
+            + `</div>${text}`;
+        }).join("");
+        elements.notesList.innerHTML = head + lines;
+      }
+
+      function addNote() {
+        const url = normalizeNoteUrl(elements.noteUrl.value);
+        if (!url) {
+          showMsg("Link không hợp lệ.", "warn");
+          return;
+        }
+        const note = elements.noteText.value.trim().slice(0, 200);
+        notes = notes.filter((item) => item.url !== url);
+        notes.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), url, note, createdAt: Date.now() });
+        saveNotes();
+        renderNotes();
+        elements.noteUrl.value = "";
+        elements.noteText.value = "";
+        elements.noteUrl.focus();
+        showMsg("Đã lưu link.", "ok");
+      }
+
+      function removeNote(id) {
+        notes = notes.filter((item) => item.id !== id);
+        saveNotes();
+        renderNotes();
+      }
+
+      function clearNotes() {
+        if (!confirm("Xoá tất cả link đã lưu?")) return;
+        notes = [];
+        saveNotes();
+        renderNotes();
+      }
+
+      function copyNote(id) {
+        const item = notes.find((entry) => entry.id === id);
+        if (!item) return;
+        navigator.clipboard.writeText(item.url).then(
+          () => showMsg("Đã copy link.", "ok"),
+          () => showMsg("Không copy được.", "warn")
+        );
+      }
+
+      function openNote(id) {
+        const item = notes.find((entry) => entry.id === id);
+        if (item) window.open(item.url, "_blank", "noopener");
+      }
+
+      function exportNotes() {
+        if (!notes.length) return;
+        const lines = notes.map((item) => `${item.url}\t${item.note || ""}`);
+        downloadBlob(new Blob([lines.join("\n")], { type: "text/plain" }), "ads-tool-links.txt");
       }
 
       // ---- step 3: variant cards ----
@@ -2349,7 +2459,35 @@
         if (state.reportBlob && state.reportName) downloadBlob(state.reportBlob, state.reportName);
       });
 
+      elements.noteSaveBtn.addEventListener("click", addNote);
+      for (const input of [elements.noteUrl, elements.noteText]) {
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            addNote();
+          }
+        });
+      }
+      elements.notesList.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-note-action]");
+        if (!btn) return;
+        const action = btn.dataset.noteAction;
+        const id = btn.dataset.noteId;
+        if (action === "export") exportNotes();
+        else if (action === "clear") clearNotes();
+        else if (action === "copy") copyNote(id);
+        else if (action === "open") openNote(id);
+        else if (action === "remove") removeNote(id);
+      });
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === "local" && changes[NOTES_KEY]) {
+          notes = changes[NOTES_KEY].newValue || [];
+          renderNotes();
+        }
+      });
+
       addVariantRow();
       updateFileMeta();
       refreshAll();
+      loadNotes();
     })();

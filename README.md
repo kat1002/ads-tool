@@ -34,6 +34,8 @@ Bấm biểu tượng **Ads Tool** trên thanh công cụ, tool mở trong một
 
 ![Giao diện Ads Tool](docs/4-tool.png)
 
+- **Ghi chú link:** panel ở cột bên phải, lưu link kèm ghi chú (tuỳ chọn) trên máy bằng `chrome.storage.local`, vẫn còn sau khi khởi động lại trình duyệt. Hỗ trợ mở, copy, xoá, xoá tất cả và xuất file `.txt`.
+
 ## Cập nhật
 
 Tải zip mới, giải nén đè lên thư mục cũ, rồi vào trang extensions và bấm **Reload** ở Ads Tool.
