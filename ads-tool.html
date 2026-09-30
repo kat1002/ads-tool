@@ -101,9 +101,10 @@
     .meta-box { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
     .meta { color: var(--muted); font-size: 12px; }
     .source-list { display: grid; gap: 4px; margin-top: 6px; }
-    .source-line { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
-    .source-line span:first-child { word-break: break-all; }
-    .source-line span:last-child { color: var(--muted); white-space: nowrap; }
+    .source-line { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+    .source-line .source-name { flex: 1; word-break: break-all; }
+    .source-line .source-size { color: var(--muted); white-space: nowrap; }
+    .source-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
     /* step 2: two-part store field */
     .pair-field { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }

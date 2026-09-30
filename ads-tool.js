@@ -576,14 +576,31 @@
         }
 
         const totalBytes = state.sources.reduce((sum, source) => sum + source.file.size, 0);
-        const lines = state.sources.map((source) => (
-          `<div class="source-line"><span>${escapeHtml(source.file.name)}</span><span>${formatBytes(source.file.size)}</span></div>`
+        const dis = state.busy ? " disabled" : "";
+        const lines = state.sources.map((source, index) => (
+          `<div class="source-line"><span class="source-name">${escapeHtml(source.file.name)}</span><span class="source-size">${formatBytes(source.file.size)}</span><button class="small" type="button" data-remove-index="${index}"${dis} aria-label="Xoá ${escapeHtml(source.file.name)}">Xoá</button></div>`
         )).join("");
 
         elements.fileMeta.innerHTML = [
-          `<div class="meta"><strong>${state.sources.length}</strong> file · ${formatBytes(totalBytes)}</div>`,
+          `<div class="meta source-head"><span><strong>${state.sources.length}</strong> file · ${formatBytes(totalBytes)}</span><button class="small" type="button" data-clear-all="1"${dis}>Xoá tất cả</button></div>`,
           `<div class="source-list">${lines}</div>`
         ].join("");
+      }
+
+      function removeSource(index) {
+        if (state.busy || !state.sources[index]) return;
+        clearOutputState();
+        state.sources.splice(index, 1);
+        updateFileMeta();
+        refreshAll();
+      }
+
+      function clearSources() {
+        if (state.busy) return;
+        clearOutputState();
+        state.sources = [];
+        updateFileMeta();
+        refreshAll();
       }
 
       function clearOutputState() {
@@ -2080,6 +2097,7 @@
 
       function setBusy(busy) {
         state.busy = busy;
+        updateFileMeta();
         elements.addVariantBtn.disabled = busy;
         elements.openAddBtn.disabled = busy;
         setButtonsEnabled();
@@ -2250,6 +2268,12 @@
         event.preventDefault();
         elements.dropZone.classList.remove("dragover");
         handleFallbackSelection(event.dataTransfer.files);
+      });
+      elements.fileMeta.addEventListener("click", (event) => {
+        const btn = event.target.closest("button");
+        if (!btn) return;
+        if (btn.dataset.clearAll) clearSources();
+        else if (btn.dataset.removeIndex !== undefined) removeSource(Number(btn.dataset.removeIndex));
       });
       elements.fileInput.addEventListener("change", (event) => {
         handleFallbackSelection(event.target.files);
