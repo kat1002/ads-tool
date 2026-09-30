@@ -34,7 +34,7 @@ Bấm biểu tượng **Ads Tool** trên thanh công cụ, tool mở trong một
 
 ![Giao diện Ads Tool](docs/4-tool.png)
 
-- **Ghi chú link:** panel ở cột bên phải, lưu link kèm ghi chú (tuỳ chọn) trên máy bằng `chrome.storage.local`, vẫn còn sau khi khởi động lại trình duyệt. Hỗ trợ mở, copy, xoá, xoá tất cả và xuất file `.txt`.
+- **Ghi chú link:** widget nổi ở góc dưới bên phải, lưu link kèm ghi chú (tuỳ chọn) trên máy bằng `chrome.storage.local`, chia theo danh mục (tab) như từng game hoặc thể loại. Hỗ trợ mở, copy, xoá, đổi tên/xoá danh mục, xuất và nhập file `.txt` để chuyển sang máy khác.
 
 ## Cập nhật
 

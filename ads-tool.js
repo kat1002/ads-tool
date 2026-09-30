@@ -63,6 +63,16 @@
         noteSaveBtn: $("noteSaveBtn"),
         notesList: $("notesList"),
         notesCount: $("notesCount"),
+        notesLauncher: $("notesLauncher"),
+        notesWidget: $("notesWidget"),
+        notesTabs: $("notesTabs"),
+        notesCatName: $("notesCatName"),
+        notesRenameBtn: $("notesRenameBtn"),
+        notesDeleteCatBtn: $("notesDeleteCatBtn"),
+        notesExportBtn: $("notesExportBtn"),
+        notesImportBtn: $("notesImportBtn"),
+        notesImportFile: $("notesImportFile"),
+        notesCloseBtn: $("notesCloseBtn"),
         versionBadge: $("versionBadge"),
         checkUpdateBtn: $("checkUpdateBtn"),
         updateStatus: $("updateStatus"),
@@ -263,14 +273,64 @@
         return `<a class="chip-link ios" href="${escapeHtml(cleanAppStoreUrl(value))}" target="_blank" rel="noopener" title="${escapeHtml(value)}">${label}${escapeHtml(apple.country.toUpperCase())} · id${escapeHtml(apple.id)}</a>`;
       }
 
-      // ---- link notes (persisted) ----
-      const NOTES_KEY = "adsToolLinkNotes";
-      let notes = [];
+      // ---- link notes (persisted, grouped in categories) ----
+      const NOTES_KEY = "adsToolLinkNotesV2";
+      const NOTES_KEY_V1 = "adsToolLinkNotes";
+      const DEFAULT_CAT = "Chung";
+      const MAX_CAT_NAME = 40;
+      let notesState = { version: 2, activeId: "", open: false, categories: [] };
+
+      function newId() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      }
+
+      function makeCategory(name, links) {
+        return { id: newId(), name, createdAt: Date.now(), links: links || [] };
+      }
+
+      function sanitizeLinks(list) {
+        if (!Array.isArray(list)) return [];
+        return list
+          .filter((item) => item && typeof item.url === "string" && item.url)
+          .map((item) => ({
+            id: typeof item.id === "string" && item.id ? item.id : newId(),
+            url: item.url,
+            note: typeof item.note === "string" ? item.note : "",
+            createdAt: Number(item.createdAt) || Date.now()
+          }));
+      }
+
+      function sanitizeState(raw) {
+        const src = raw && typeof raw === "object" ? raw : {};
+        const categories = (Array.isArray(src.categories) ? src.categories : [])
+          .filter((cat) => cat && typeof cat.name === "string" && cat.name.trim())
+          .map((cat) => ({
+            id: typeof cat.id === "string" && cat.id ? cat.id : newId(),
+            name: cat.name.trim().slice(0, MAX_CAT_NAME),
+            createdAt: Number(cat.createdAt) || Date.now(),
+            links: sanitizeLinks(cat.links)
+          }));
+        if (!categories.length) categories.push(makeCategory(DEFAULT_CAT));
+        const activeId = categories.some((cat) => cat.id === src.activeId) ? src.activeId : categories[0].id;
+        return { version: 2, activeId, open: !!src.open, categories };
+      }
+
+      function activeCat() {
+        return notesState.categories.find((cat) => cat.id === notesState.activeId) || notesState.categories[0];
+      }
 
       async function loadNotes() {
         try {
-          const stored = await chrome.storage.local.get(NOTES_KEY);
-          notes = Array.isArray(stored[NOTES_KEY]) ? stored[NOTES_KEY] : [];
+          const stored = await chrome.storage.local.get([NOTES_KEY, NOTES_KEY_V1]);
+          if (stored[NOTES_KEY]) {
+            notesState = sanitizeState(stored[NOTES_KEY]);
+          } else if (Array.isArray(stored[NOTES_KEY_V1])) {
+            notesState = sanitizeState({ categories: [{ name: DEFAULT_CAT, links: stored[NOTES_KEY_V1] }] });
+            await chrome.storage.local.set({ [NOTES_KEY]: notesState });
+            await chrome.storage.local.remove(NOTES_KEY_V1);
+          } else {
+            notesState = sanitizeState(null);
+          }
           renderNotes();
         } catch (e) {
           showMsg(`Không đọc được ghi chú: ${e.message}`, "err");
@@ -279,7 +339,7 @@
 
       function saveNotes() {
         try {
-          Promise.resolve(chrome.storage.local.set({ [NOTES_KEY]: notes })).catch((e) => {
+          Promise.resolve(chrome.storage.local.set({ [NOTES_KEY]: notesState })).catch((e) => {
             showMsg(`Không lưu được ghi chú: ${e.message}`, "err");
           });
         } catch (e) {
@@ -295,14 +355,28 @@
         return /^https?:\/\/\S+$/i.test(cleaned) ? cleaned : null;
       }
 
+      function findCategoryByName(name) {
+        const key = name.toLowerCase();
+        return notesState.categories.find((cat) => cat.name.toLowerCase() === key);
+      }
+
       function renderNotes() {
-        elements.notesCount.textContent = notes.length || "";
-        if (!notes.length) {
-          elements.notesList.innerHTML = '<div class="meta">Chưa có link nào được lưu.</div>';
+        const cat = activeCat();
+        const total = notesState.categories.reduce((sum, item) => sum + item.links.length, 0);
+        elements.notesCount.textContent = total ? `(${total})` : "";
+        elements.notesLauncher.classList.toggle("hidden", notesState.open);
+        elements.notesLauncher.setAttribute("aria-expanded", notesState.open ? "true" : "false");
+        elements.notesWidget.classList.toggle("hidden", !notesState.open);
+        elements.notesTabs.innerHTML = notesState.categories.map((item) => {
+          const selected = item.id === cat.id;
+          return `<button class="notes-tab" type="button" role="tab" aria-selected="${selected}" data-cat-id="${escapeHtml(item.id)}" title="${escapeHtml(item.name)}">${escapeHtml(item.name)} (${item.links.length})</button>`;
+        }).join("") + '<button class="notes-tab" type="button" data-note-action="add-cat" title="Thêm danh mục" aria-label="Thêm danh mục">+</button>';
+        elements.notesCatName.textContent = `${cat.name} · ${cat.links.length} link`;
+        if (!cat.links.length) {
+          elements.notesList.innerHTML = '<div class="meta">Chưa có link nào trong danh mục này.</div>';
           return;
         }
-        const head = `<div class="meta source-head"><span><strong>${notes.length}</strong> link</span><span><button class="small" type="button" data-note-action="export">Xuất .txt</button> <button class="small danger" type="button" data-note-action="clear">Xoá tất cả</button></span></div>`;
-        const lines = notes.map((item) => {
+        elements.notesList.innerHTML = cat.links.map((item) => {
           const kind = classifyCell(item.url);
           const chip = kind
             ? linkChip(kind, item.url, true)
@@ -315,7 +389,66 @@
             + `<button class="small" type="button" data-note-action="remove" data-note-id="${id}">Xoá</button>`
             + `</div>${text}`;
         }).join("");
-        elements.notesList.innerHTML = head + lines;
+      }
+
+      function setNotesOpen(open) {
+        notesState.open = open;
+        saveNotes();
+        renderNotes();
+        if (open) elements.noteUrl.focus();
+        else elements.notesLauncher.focus();
+      }
+
+      function askCategoryName(title, initial) {
+        const raw = prompt(title, initial || "");
+        if (raw === null) return null;
+        const name = raw.replace(/[\t\r\n]+/g, " ").trim().slice(0, MAX_CAT_NAME);
+        if (!name) {
+          showMsg("Tên danh mục không được để trống.", "warn");
+          return null;
+        }
+        const dup = findCategoryByName(name);
+        if (dup && dup.id !== notesState.activeId) {
+          showMsg("Đã có danh mục trùng tên.", "warn");
+          return null;
+        }
+        return name;
+      }
+
+      function addCategory() {
+        const name = askCategoryName("Tên danh mục mới (ví dụ tên game hoặc thể loại):", "");
+        if (!name) return;
+        const cat = makeCategory(name);
+        notesState.categories.push(cat);
+        notesState.activeId = cat.id;
+        saveNotes();
+        renderNotes();
+      }
+
+      function renameCategory() {
+        const cat = activeCat();
+        const name = askCategoryName("Đổi tên danh mục:", cat.name);
+        if (!name) return;
+        cat.name = name;
+        saveNotes();
+        renderNotes();
+      }
+
+      function deleteCategory() {
+        const cat = activeCat();
+        if (!confirm(`Xoá danh mục "${cat.name}" và ${cat.links.length} link trong đó?`)) return;
+        notesState.categories = notesState.categories.filter((item) => item.id !== cat.id);
+        if (!notesState.categories.length) notesState.categories.push(makeCategory(DEFAULT_CAT));
+        notesState.activeId = notesState.categories[0].id;
+        saveNotes();
+        renderNotes();
+      }
+
+      function selectCategory(id) {
+        if (!notesState.categories.some((cat) => cat.id === id)) return;
+        notesState.activeId = id;
+        saveNotes();
+        renderNotes();
       }
 
       function addNote() {
@@ -324,9 +457,10 @@
           showMsg("Link không hợp lệ.", "warn");
           return;
         }
+        const cat = activeCat();
         const note = elements.noteText.value.trim().slice(0, 200);
-        notes = notes.filter((item) => item.url !== url);
-        notes.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), url, note, createdAt: Date.now() });
+        cat.links = cat.links.filter((item) => item.url !== url);
+        cat.links.unshift({ id: newId(), url, note, createdAt: Date.now() });
         saveNotes();
         renderNotes();
         elements.noteUrl.value = "";
@@ -335,21 +469,19 @@
         showMsg("Đã lưu link.", "ok");
       }
 
-      function removeNote(id) {
-        notes = notes.filter((item) => item.id !== id);
-        saveNotes();
-        renderNotes();
+      function findLink(id) {
+        return activeCat().links.find((entry) => entry.id === id);
       }
 
-      function clearNotes() {
-        if (!confirm("Xoá tất cả link đã lưu?")) return;
-        notes = [];
+      function removeNote(id) {
+        const cat = activeCat();
+        cat.links = cat.links.filter((item) => item.id !== id);
         saveNotes();
         renderNotes();
       }
 
       function copyNote(id) {
-        const item = notes.find((entry) => entry.id === id);
+        const item = findLink(id);
         if (!item) return;
         navigator.clipboard.writeText(item.url).then(
           () => showMsg("Đã copy link.", "ok"),
@@ -358,14 +490,68 @@
       }
 
       function openNote(id) {
-        const item = notes.find((entry) => entry.id === id);
+        const item = findLink(id);
         if (item) window.open(item.url, "_blank", "noopener");
       }
 
       function exportNotes() {
-        if (!notes.length) return;
-        const lines = notes.map((item) => `${item.url}\t${item.note || ""}`);
+        const clean = (text) => String(text || "").replace(/[\t\r\n]+/g, " ").trim();
+        const lines = [];
+        for (const cat of notesState.categories) {
+          for (const item of cat.links) lines.push(`${clean(cat.name)}\t${item.url}\t${clean(item.note)}`);
+        }
+        if (!lines.length) {
+          showMsg("Chưa có link nào để xuất.", "warn");
+          return;
+        }
         downloadBlob(new Blob([lines.join("\n")], { type: "text/plain" }), "ads-tool-links.txt");
+      }
+
+      async function importNotes(file) {
+        if (!file) return;
+        let text;
+        try {
+          text = await file.text();
+        } catch (e) {
+          showMsg(`Không đọc được file: ${e.message}`, "err");
+          return;
+        }
+        let added = 0;
+        let dupes = 0;
+        let bad = 0;
+        for (const line of text.replace(/^﻿/, "").split(/\r?\n/)) {
+          if (!line.trim()) continue;
+          const cols = line.split("\t");
+          let catName = "";
+          let rawUrl;
+          let note = "";
+          if (cols.length === 1) {
+            rawUrl = cols[0];
+          } else {
+            catName = cols[0].trim().slice(0, MAX_CAT_NAME);
+            rawUrl = cols[1];
+            note = cols.slice(2).join(" ");
+          }
+          const url = normalizeNoteUrl(rawUrl);
+          if (!url) {
+            bad++;
+            continue;
+          }
+          let cat = catName ? findCategoryByName(catName) : activeCat();
+          if (!cat) {
+            cat = makeCategory(catName);
+            notesState.categories.push(cat);
+          }
+          if (cat.links.some((item) => item.url === url)) {
+            dupes++;
+            continue;
+          }
+          cat.links.push({ id: newId(), url, note: note.trim().slice(0, 200), createdAt: Date.now() });
+          added++;
+        }
+        saveNotes();
+        renderNotes();
+        showMsg(`Đã nhập ${added} link, bỏ qua ${dupes} trùng, ${bad} lỗi`, bad ? "warn" : "ok");
       }
 
       // ---- update check ----
@@ -2716,15 +2902,36 @@
         if (!btn) return;
         const action = btn.dataset.noteAction;
         const id = btn.dataset.noteId;
-        if (action === "export") exportNotes();
-        else if (action === "clear") clearNotes();
-        else if (action === "copy") copyNote(id);
+        if (action === "copy") copyNote(id);
         else if (action === "open") openNote(id);
         else if (action === "remove") removeNote(id);
       });
+      elements.notesTabs.addEventListener("click", (event) => {
+        const tab = event.target.closest("button");
+        if (!tab) return;
+        if (tab.dataset.noteAction === "add-cat") addCategory();
+        else if (tab.dataset.catId) selectCategory(tab.dataset.catId);
+      });
+      elements.notesTabs.addEventListener("dblclick", (event) => {
+        if (event.target.closest("button[data-cat-id]")) renameCategory();
+      });
+      elements.notesLauncher.addEventListener("click", () => setNotesOpen(true));
+      elements.notesCloseBtn.addEventListener("click", () => setNotesOpen(false));
+      elements.notesRenameBtn.addEventListener("click", renameCategory);
+      elements.notesDeleteCatBtn.addEventListener("click", deleteCategory);
+      elements.notesExportBtn.addEventListener("click", exportNotes);
+      elements.notesImportBtn.addEventListener("click", () => elements.notesImportFile.click());
+      elements.notesImportFile.addEventListener("change", async () => {
+        const file = elements.notesImportFile.files && elements.notesImportFile.files[0];
+        await importNotes(file);
+        elements.notesImportFile.value = "";
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && notesState.open && !document.querySelector("dialog[open]")) setNotesOpen(false);
+      });
       chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === "local" && changes[NOTES_KEY]) {
-          notes = changes[NOTES_KEY].newValue || [];
+        if (area === "local" && changes[NOTES_KEY] && changes[NOTES_KEY].newValue) {
+          notesState = sanitizeState(changes[NOTES_KEY].newValue);
           renderNotes();
         }
       });
