@@ -2704,8 +2704,21 @@
         return box.value;
       }
 
-      async function fetchText(url) {
-        const response = await fetch(url, { headers: { "Accept-Language": "en-US,en;q=0.9" } });
+      async function fetchText(url, init = {}) {
+        let response;
+        try {
+          response = await fetch(url, {
+            credentials: "omit",
+            cache: "no-store",
+            ...init,
+            headers: { "Accept-Language": "en-US,en;q=0.9", ...(init.headers || {}) },
+          });
+        } catch (err) {
+          throw new Error("network/CORS error (có thể bị chuyển hướng tới trang đăng nhập Google)");
+        }
+        if (response.redirected && /accounts\.google\.com/.test(response.url)) {
+          throw new Error("bị chuyển hướng tới trang đăng nhập Google");
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.text();
       }
@@ -2760,7 +2773,7 @@
         if (!iconUrl.startsWith("https://") || !IMAGE_HOSTS.some((suffix) => host.endsWith(suffix))) {
           throw new Error("icon host not allowed");
         }
-        const response = await fetch(iconUrl);
+        const response = await fetch(iconUrl, { credentials: "omit" });
         if (!response.ok) throw new Error(`icon HTTP ${response.status}`);
         return normalizeIcon(await response.blob());
       }
