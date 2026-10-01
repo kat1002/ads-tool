@@ -17,7 +17,7 @@ import urllib.request
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 PORT = 8765
 REPO = "kat1002/ads-tool"
 EXE_NAME = "AdsTool.exe"

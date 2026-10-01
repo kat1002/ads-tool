@@ -543,7 +543,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   };
   window.chrome = {
     storage: { local, onChanged: { addListener: (fn) => listeners.push(fn) } },
-    runtime: { getManifest: () => ({ version: "1.0.6" }) }
+    runtime: { getManifest: () => ({ version: "1.0.7" }) }
   };
   window.addEventListener("storage", (e) => {
     if (!e.key || !e.key.startsWith(PREFIX) || e.newValue === null) return;
