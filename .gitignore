@@ -1,6 +1,7 @@
 *.zip
 .DS_Store
 node_modules/
+updater/com.kat1002.playable_batch.updater.json
 updater/com.kat1002.adstool.updater.json
 updater/allowed-origins.txt
 __pycache__/

@@ -22,12 +22,18 @@ jobs:
           fi
       - name: Zip extension
         run: |
-          zip -r ads-tool-extension.zip manifest.json background.js ads-tool.html ads-tool.js jszip.min.js icons             install-updater.bat uninstall-updater.bat             updater/updater-host.bat updater/host.py updater/install.py updater/uninstall.py
+          zip -r playable-batch-extension.zip manifest.json background.js playable-batch.html playable-batch.js jszip.min.js icons             install-updater.bat uninstall-updater.bat             updater/updater-host.bat updater/host.py updater/install.py updater/uninstall.py
+          sha256sum playable-batch-extension.zip | cut -d' ' -f1 > playable-batch-extension.zip.sha256
+          # TRANSITIONAL (remove after the first Playable Batch release has been out for a while):
+          # installed v1.0.x copies look up the release asset by its old name, so publish a copy under it.
+          cp playable-batch-extension.zip ads-tool-extension.zip
           sha256sum ads-tool-extension.zip | cut -d' ' -f1 > ads-tool-extension.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: ads-tool-extension
+          name: playable-batch-extension
           path: |
+            playable-batch-extension.zip
+            playable-batch-extension.zip.sha256
             ads-tool-extension.zip
             ads-tool-extension.zip.sha256
       - name: Publish release
@@ -35,6 +41,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            playable-batch-extension.zip
+            playable-batch-extension.zip.sha256
             ads-tool-extension.zip
             ads-tool-extension.zip.sha256
 
@@ -54,13 +62,13 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match VERSION $v in store-helper.py (exe branch)"
             exit 1
           fi
-      - name: Build AdsTool.exe
+      - name: Build PlayableBatch.exe
         shell: bash
         run: |
           python -m pip install pyinstaller
-          python -m PyInstaller --onefile --noconsole --name AdsTool --clean --add-data "ads-tool.html;." store-helper.py
+          python -m PyInstaller --onefile --noconsole --name PlayableBatch --clean --add-data "playable-batch.html;." store-helper.py
       - name: Upload to release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/AdsTool.exe --clobber
+        run: gh release upload "$GITHUB_REF_NAME" dist/PlayableBatch.exe --clobber

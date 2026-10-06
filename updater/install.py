@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Register the Ads Tool native messaging host for the current user.
+"""Register the Playable Batch native messaging host for the current user.
 
 Usage: python install.py [--dry-run]
 """
@@ -8,7 +8,7 @@ import os
 import re
 import sys
 
-HOST_NAME = "com.kat1002.adstool.updater"
+HOST_NAME = "com.kat1002.playable_batch.updater"
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 ID_RE = re.compile(r"^[a-p]{32}$")
@@ -30,10 +30,10 @@ def norm(p):
     return os.path.normcase(os.path.normpath(p))
 
 
-def is_ads_tool(folder):
+def is_playable_batch(folder):
     try:
         with open(os.path.join(folder, "manifest.json"), "r", encoding="utf-8-sig") as f:
-            return json.load(f).get("name") == "Ads Tool"
+            return json.load(f).get("name") == "Playable Batch"
     except Exception:
         return False
 
@@ -82,8 +82,8 @@ def find_ids(folder):
 
 def ask_id():
     print("Khong tim thay ID extension tu dong. / Could not find the extension ID automatically.")
-    print("Mo Ads Tool, copy ID trong huong dan 'Cai tu cap nhat', roi dan vao day.")
-    print("Open Ads Tool, copy the ID shown in the updater help, and paste it here.")
+    print("Mo Playable Batch, copy ID trong huong dan 'Cai tu cap nhat', roi dan vao day.")
+    print("Open Playable Batch, copy the ID shown in the updater help, and paste it here.")
     while True:
         try:
             v = input("Extension ID (32 ky tu a-p / 32 chars a-p): ").strip()
@@ -124,7 +124,7 @@ def write_files(ids):
             f.write("chrome-extension://%s/\n" % i)
     doc = {
         "name": HOST_NAME,
-        "description": "Ads Tool self-updater",
+        "description": "Playable Batch self-updater",
         "path": launcher_path(),
         "type": "stdio",
         "allowed_origins": ["chrome-extension://%s/" % i for i in ids],
@@ -164,9 +164,9 @@ def register(jp, dry):
 
 def main():
     dry = "--dry-run" in sys.argv[1:]
-    if not is_ads_tool(ROOT):
-        print("Thu muc nay khong phai Ads Tool (khong thay manifest.json 'Ads Tool').")
-        print("This folder is not Ads Tool.")
+    if not is_playable_batch(ROOT):
+        print("Thu muc nay khong phai Playable Batch (khong thay manifest.json 'Playable Batch').")
+        print("This folder is not Playable Batch.")
         return 1
     found = find_ids(ROOT)
     for eid, label in found.items():
@@ -180,8 +180,8 @@ def main():
     jp = write_files(ids)
     register(jp, dry)
     print("")
-    print("Xong. Hay tai lai (reload) extension / trang Ads Tool.")
-    print("Done. Reload the extension / Ads Tool page.")
+    print("Xong. Hay tai lai (reload) extension / trang Playable Batch.")
+    print("Done. Reload the extension / Playable Batch page.")
     return 0
 
 

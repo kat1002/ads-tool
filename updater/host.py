@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ads Tool native messaging host (Python 3, stdlib only).
+"""Playable Batch native messaging host (Python 3, stdlib only).
 
 Protocol: 4-byte little-endian length + UTF-8 JSON on stdin/stdout, one reply
 per request. Nothing else may ever be written to stdout.
@@ -18,18 +18,19 @@ import urllib.request
 import zipfile
 
 HOST_VERSION = "1.0.6"
+# GitHub repo is not renamed yet (old name redirects); change here when it is.
 RELEASE_BASE = "https://github.com/kat1002/ads-tool/releases/download"
-ZIP_NAME = "ads-tool-extension.zip"
+ZIP_NAME = "playable-batch-extension.zip"
 MAX_ZIP = 20 * 1024 * 1024
 MAX_FILE = 10 * 1024 * 1024
 LOG_CAP = 200 * 1024
-APP_NAME = "Ads Tool"
+APP_NAME = "Playable Batch"
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 ALLOWED = re.compile(
-    r"^(manifest\.json|background\.js|ads-tool\.html|ads-tool\.js|jszip\.min\.js"
+    r"^(manifest\.json|background\.js|playable-batch\.html|playable-batch\.js|jszip\.min\.js"
     r"|icons/[A-Za-z0-9._-]+\.png"
     r"|updater/host\.py|updater/install\.py|updater/uninstall\.py"
     r"|install-updater\.bat|uninstall-updater\.bat)$"
@@ -47,7 +48,7 @@ class HostError(Exception):
 def log(msg):
     try:
         base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "share")
-        d = os.path.join(base, "AdsTool")
+        d = os.path.join(base, "PlayableBatch")
         os.makedirs(d, exist_ok=True)
         p = os.path.join(d, "updater.log")
         if os.path.exists(p) and os.path.getsize(p) > LOG_CAP:
@@ -88,9 +89,9 @@ def check_root():
     try:
         m = read_manifest(ROOT)
     except Exception:
-        raise HostError("NOT_ADS_TOOL", "manifest.json not found in host folder")
+        raise HostError("NOT_PLAYABLE_BATCH", "manifest.json not found in host folder")
     if m.get("name") != APP_NAME:
-        raise HostError("NOT_ADS_TOOL", "host folder is not Ads Tool")
+        raise HostError("NOT_PLAYABLE_BATCH", "host folder is not Playable Batch")
     return m
 
 
@@ -108,7 +109,7 @@ def check_origin():
 def fetch(url, cap):
     """Return bytes. HTTPError propagates (caller decides); other failures -> DOWNLOAD."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "AdsToolUpdater/" + HOST_VERSION})
+        req = urllib.request.Request(url, headers={"User-Agent": "PlayableBatchUpdater/" + HOST_VERSION})
         with urllib.request.urlopen(req, timeout=60) as r:
             data = r.read(cap + 1)
     except urllib.error.HTTPError:
@@ -149,7 +150,7 @@ def do_update(version):
         z = zipfile.ZipFile(io.BytesIO(blob))
     except Exception as e:
         raise HostError("ZIP", "bad zip: %s" % e)
-    tmp = tempfile.mkdtemp(prefix="adstool-upd-")
+    tmp = tempfile.mkdtemp(prefix="playablebatch-upd-")
     try:
         files = {}
         for info in z.infolist():
