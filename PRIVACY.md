@@ -1,12 +1,12 @@
-# Ads Tool Privacy Policy
+# Playable Batch Privacy Policy
 
 Last updated: 2026-10-06
 
-Ads Tool is a browser extension that helps ad-playable creators process playable ad files in batch. This policy explains what data the extension handles.
+Playable Batch is a browser extension that helps ad-playable creators process playable ad files in batch. This policy explains what data the extension handles.
 
 ## Summary
 
-Ads Tool does not collect, store, transmit or sell any personal data to the developer. The developer operates no server and receives no analytics, telemetry, crash reports or usage data.
+Playable Batch does not collect, store, transmit or sell any personal data to the developer. The developer operates no server and receives no analytics, telemetry, crash reports or usage data.
 
 ## What the extension does with data
 
