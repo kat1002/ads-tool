@@ -1,7 +1,7 @@
-"""Generate the HTML + run.bat bundle: dist-bat/ads-tool.html, dist-bat/run.bat, ads-tool-html-bat.zip.
+"""Generate the HTML + run.bat bundle: dist-bat/playable-batch.html, dist-bat/run.bat, playable-batch-html-bat.zip.
 
 Run:  python build-bat.py
-Reads ads-tool.html, ads-tool.js and jszip.min.js from disk, inlines the scripts, adds a
+Reads playable-batch.html, playable-batch.js and jszip.min.js from disk, inlines the scripts, adds a
 chrome.storage shim (localStorage) and drops the extension-only pieces (update check, native
 messaging, linked folder, version badge). The Store fetch (Play / App Store) is KEPT but goes through
 a local PowerShell helper embedded in run.bat (HttpListener on 127.0.0.1:8765): Google Play answers 403
@@ -16,7 +16,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "dist-bat")
-ZIP_PATH = os.path.join(HERE, "ads-tool-html-bat.zip")
+ZIP_PATH = os.path.join(HERE, "playable-batch-html-bat.zip")
 
 
 def read(path):
@@ -42,7 +42,17 @@ def cut_between(text, start, end, new, label):
 
 SHIM = """(() => {
   // standalone build: emulate the extension APIs the page uses, backed by localStorage.
-  const PREFIX = "adsTool:";
+  const PREFIX = "playableBatch:";
+  // migrate notes saved under the old product name (prefix "adsTool:", keys "adsTool...") to the new names
+  try {
+    const OLD_PREFIX = "adsTool:";
+    for (const full of Object.keys(localStorage)) {
+      if (!full.startsWith(OLD_PREFIX)) continue;
+      const name = full.slice(OLD_PREFIX.length).replace(/^adsTool/, "playableBatch");
+      if (localStorage.getItem(PREFIX + name) === null) localStorage.setItem(PREFIX + name, localStorage.getItem(full));
+      localStorage.removeItem(full);
+    }
+  } catch (e) { /* ignore */ }
   const listeners = [];
   const local = {
     async get(keys) {
@@ -111,29 +121,29 @@ PICK_ICON_LISTENER = """      elements.checkBody.addEventListener("change", asyn
 RUN_BAT = r"""@echo off
 setlocal
 rem ===========================================================================
-rem Ads Tool launcher = batch + PowerShell in ONE file (nothing to install).
+rem Playable Batch launcher = batch + PowerShell in ONE file (nothing to install).
 rem   1. This batch part finds Edge/Chrome and starts the PowerShell part below.
 rem   2. The PowerShell part runs a tiny local web server on http://127.0.0.1:8765/
-rem      that serves ads-tool.html and fetches Google Play / App Store pages for it
+rem      that serves playable-batch.html and fetches Google Play / App Store pages for it
 rem      (server-side, because Google Play rejects requests coming straight from a file page).
 rem   3. It opens the browser in app mode, and stops when the window is closed.
 rem Keep the black helper window open while you use the tool.
 rem ===========================================================================
 
-if not exist "%~dp0ads-tool.html" goto nofile
+if not exist "%~dp0playable-batch.html" goto nofile
 
-set "ADS_DIR=%~dp0"
-set "ADS_BAT=%~f0"
-set "ADS_BROWSER="
-if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "ADS_BROWSER=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
-if not defined ADS_BROWSER if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "ADS_BROWSER=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
-if not defined ADS_BROWSER if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "ADS_BROWSER=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
-if not defined ADS_BROWSER if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "ADS_BROWSER=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
-if not defined ADS_BROWSER if exist "%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe" set "ADS_BROWSER=%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
-if not defined ADS_BROWSER if not defined ADS_TOOL_NO_BROWSER goto nobrowser
+set "PLAYABLE_BATCH_DIR=%~dp0"
+set "PLAYABLE_BATCH_BAT=%~f0"
+set "PLAYABLE_BATCH_BROWSER="
+if exist "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" set "PLAYABLE_BATCH_BROWSER=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+if not defined PLAYABLE_BATCH_BROWSER if exist "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe" set "PLAYABLE_BATCH_BROWSER=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+if not defined PLAYABLE_BATCH_BROWSER if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "PLAYABLE_BATCH_BROWSER=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
+if not defined PLAYABLE_BATCH_BROWSER if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "PLAYABLE_BATCH_BROWSER=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+if not defined PLAYABLE_BATCH_BROWSER if exist "%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe" set "PLAYABLE_BATCH_BROWSER=%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"
+if not defined PLAYABLE_BATCH_BROWSER if not defined PLAYABLE_BATCH_NO_BROWSER goto nobrowser
 
 rem Run the PowerShell code that follows the marker line at the bottom of this file.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$t=[IO.File]::ReadAllText($env:ADS_BAT); $m=':::'+'PS-CODE-BELOW'; iex ($t.Substring($t.IndexOf($m)+$m.Length))"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$t=[IO.File]::ReadAllText($env:PLAYABLE_BATCH_BAT); $m=':::'+'PS-CODE-BELOW'; iex ($t.Substring($t.IndexOf($m)+$m.Length))"
 exit /b %errorlevel%
 
 :nobrowser
@@ -147,8 +157,8 @@ exit /b 1
 
 :nofile
 echo.
-echo Khong tim thay ads-tool.html canh run.bat. Hay giai nen ca hai file vao cung mot thu muc.
-echo (ads-tool.html not found next to run.bat. Keep both files in the same folder.)
+echo Khong tim thay playable-batch.html canh run.bat. Hay giai nen ca hai file vao cung mot thu muc.
+echo (playable-batch.html not found next to run.bat. Keep both files in the same folder.)
 echo.
 pause
 exit /b 1
@@ -161,7 +171,7 @@ $ErrorActionPreference = 'Stop'
 $Port = 8765
 $Prefix = "http://127.0.0.1:$Port/"
 $HostHeader = "127.0.0.1:$Port"
-$Dir = $env:ADS_DIR
+$Dir = $env:PLAYABLE_BATCH_DIR
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # --- start the loopback-only listener (fail clearly if the port is taken) ---
@@ -171,9 +181,9 @@ try {
   $listener.Start()
 } catch {
   Write-Host ''
-  Write-Host "Khong mo duoc cong $Port (co the Ads Tool dang chay, hoac chuong trinh khac dang dung cong nay)."
-  Write-Host "Hay dong cua so Ads Tool / helper cu roi chay lai run.bat."
-  Write-Host "(Cannot listen on port $Port. Ads Tool may already be running, or another program uses this port. Close it and run this file again.)"
+  Write-Host "Khong mo duoc cong $Port (co the Playable Batch dang chay, hoac chuong trinh khac dang dung cong nay)."
+  Write-Host "Hay dong cua so Playable Batch / helper cu roi chay lai run.bat."
+  Write-Host "(Cannot listen on port $Port. Playable Batch may already be running, or another program uses this port. Close it and run this file again.)"
   Write-Host ''
   cmd /c pause
   exit 1
@@ -221,9 +231,9 @@ $handler = {
       return
     }
 
-    if ($path -eq '/' -or $path -eq '/ads-tool.html') {
-      $file = Join-Path $dir 'ads-tool.html'
-      if (-not (Test-Path -LiteralPath $file)) { SendText 404 'ads-tool.html not found'; return }
+    if ($path -eq '/' -or $path -eq '/playable-batch.html') {
+      $file = Join-Path $dir 'playable-batch.html'
+      if (-not (Test-Path -LiteralPath $file)) { SendText 404 'playable-batch.html not found'; return }
       Send 200 'text/html; charset=utf-8' ([IO.File]::ReadAllBytes($file))
       return
     }
@@ -286,16 +296,16 @@ $jobs = New-Object System.Collections.ArrayList
 
 # --- open the browser in app mode (no security flags; own profile keeps the notes) ---
 $browser = $null
-if ($env:ADS_BROWSER) {
-  $profileDir = Join-Path $env:LOCALAPPDATA 'AdsToolProfile'
-  $browser = Start-Process -FilePath $env:ADS_BROWSER -PassThru -ArgumentList @(
-    "--app=${Prefix}ads-tool.html",
+if ($env:PLAYABLE_BATCH_BROWSER) {
+  $profileDir = Join-Path $env:LOCALAPPDATA 'PlayableBatchProfile'
+  $browser = Start-Process -FilePath $env:PLAYABLE_BATCH_BROWSER -PassThru -ArgumentList @(
+    "--app=${Prefix}playable-batch.html",
     "--user-data-dir=`"$profileDir`""
   )
 }
 
-Write-Host "Ads Tool dang chay tai $Prefix  -  giu cua so nay mo, dong cua so Ads Tool de thoat."
-Write-Host "(Ads Tool is running. Keep this window open; it closes by itself when you close the app window.)"
+Write-Host "Playable Batch dang chay tai $Prefix  -  giu cua so nay mo, dong cua so Playable Batch de thoat."
+Write-Host "(Playable Batch is running. Keep this window open; it closes by itself when you close the app window.)"
 
 # --- main loop: accept requests, reap finished ones, decide when to stop ---
 $startTicks = [DateTime]::UtcNow.Ticks
@@ -332,7 +342,7 @@ while ($true) {
   }
 }
 
-Write-Host 'Da dong Ads Tool. (Ads Tool closed.)'
+Write-Host 'Da dong Playable Batch. (Playable Batch closed.)'
 # Hard exit: $listener.Stop()/$pool.Close() can block on in-flight requests and leave the helper hung.
 # Ending the process releases the port.
 [Environment]::Exit(0)
@@ -340,8 +350,8 @@ Write-Host 'Da dong Ads Tool. (Ads Tool closed.)'
 
 
 def main():
-    html = read("ads-tool.html")
-    js = read("ads-tool.js")
+    html = read("playable-batch.html")
+    js = read("playable-batch.js")
     jszip = read("jszip.min.js")
     if "</script>" in js or "</script>" in jszip:
         sys.exit("inline script contains </script>")
@@ -393,7 +403,7 @@ def main():
                       PICK_ICON_LISTENER + "      elements.checkBody.addEventListener(\"keydown\", (event) => {", "check change handler")
 
     # --- HTML ---
-    html = replace_once(html, "<title>Ads Tool — Batch + Store Fetch</title>", "<title>Ads Tool — HTML + run.bat</title>", "title")
+    html = replace_once(html, "<title>Playable Batch</title>", "<title>Playable Batch — HTML + run.bat</title>", "title")
     html = replace_once(html, '  <script src="jszip.min.js"></script>', "  <script>\n" + jszip.rstrip("\n") + "\n  </script>", "jszip tag")
     html = cut_between(html, '      <div class="version-box">', "    </header>", "", "version box and update banners")
     html = replace_once(html, "kiểm tra tên/icon → “Xác nhận”. Mỗi app sẽ thành một variant ở bước 3.</p>",
@@ -401,11 +411,11 @@ def main():
                         "Tên và icon được tự lấy từ link store; bản này phải mở bằng <code>run.bat</code> "
                         "(helper cục bộ lấy tên/icon, không tắt bảo mật trình duyệt) và phải để cửa sổ helper mở. "
                         "Nếu lấy lỗi, nhập tên tay và bấm “Chọn ảnh”.</p>", "step 2 note")
-    html = replace_once(html, '  <script src="ads-tool.js"></script>',
+    html = replace_once(html, '  <script src="playable-batch.js"></script>',
                         "  <script>\n" + SHIM + "\n" + js.rstrip("\n") + "\n  </script>", "app tag")
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    with open(os.path.join(OUT_DIR, "ads-tool.html"), "w", encoding="utf-8", newline="\n") as fh:
+    with open(os.path.join(OUT_DIR, "playable-batch.html"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(html)
     bat = RUN_BAT.replace("\r\n", "\n").replace("\n", "\r\n")
     with open(os.path.join(OUT_DIR, "run.bat"), "wb") as fh:
@@ -413,8 +423,8 @@ def main():
 
     with zipfile.ZipFile(ZIP_PATH, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(os.path.join(OUT_DIR, "run.bat"), "run.bat")
-        zf.write(os.path.join(OUT_DIR, "ads-tool.html"), "ads-tool.html")
-    print(f"wrote dist-bat/ads-tool.html ({len(html)} bytes), dist-bat/run.bat, {os.path.basename(ZIP_PATH)}")
+        zf.write(os.path.join(OUT_DIR, "playable-batch.html"), "playable-batch.html")
+    print(f"wrote dist-bat/playable-batch.html ({len(html)} bytes), dist-bat/run.bat, {os.path.basename(ZIP_PATH)}")
 
 
 if __name__ == "__main__":

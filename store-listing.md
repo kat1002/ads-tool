@@ -1,8 +1,8 @@
-# Chrome Web Store listing: Ads Tool
+# Chrome Web Store listing: Playable Batch
 
 ## Single purpose
 
-Ads Tool helps ad-playable creators process playable ad ZIP/HTML files in batch: it reads an app's name and icon from the store link you paste, renames the playable, replaces the store links, splash name and logo inside it, and exports the result as new files.
+Playable Batch helps ad-playable creators process playable ad ZIP/HTML files in batch: it reads an app's name and icon from the store link you paste, renames the playable, replaces the store links, splash name and logo inside it, and exports the result as new files.
 
 ## Permission justifications
 
@@ -25,7 +25,7 @@ No remote code is loaded or executed. All scripts are bundled in the package.
 
 ## Privacy policy (draft)
 
-Ads Tool does not collect, store, transmit or sell any personal data to the developer. The developer operates no server and receives no analytics, telemetry or usage data.
+Playable Batch does not collect, store, transmit or sell any personal data to the developer. The developer operates no server and receives no analytics, telemetry or usage data.
 
 - Store links that you paste are used only to request the public app page or lookup data from the store that owns the link (Google Play or Apple App Store), and to download the app icon from that store's image host. These requests go directly from your browser to those stores and are subject to their own privacy policies.
 - Playable files you load are processed locally in your browser. They are never uploaded.
@@ -37,7 +37,7 @@ Contact: nguyenphuc10022004@gmail.com
 ## Chrome Web Store review checklist
 
 - [ ] `python build-store.py` run on the latest `main` changes merged into `store`; version in `store-build/manifest.json` matches the release you intend to publish (bump in `manifest.json` on main first).
-- [ ] Zip contains only: manifest.json (at root), background.js, ads-tool.html, ads-tool.js, jszip.min.js, icons/.
+- [ ] Zip contains only: manifest.json (at root), background.js, playable-batch.html, playable-batch.js, jszip.min.js, icons/.
 - [ ] Permissions are only `storage` plus the four host permissions; no `alarms`, `nativeMessaging`, GitHub hosts.
 - [ ] No network calls other than Google Play, Apple lookup and their image hosts; no remote code. Note: bundled `jszip.min.js` contains a `new Function` in its setImmediate fallback (library code, not reachable with the way it is used); mention in reviewer notes if asked.
 - [ ] Load `store-build/` unpacked in Chrome and test: click the icon opens the tool, add Play and App Store links fetch name/icon, notes save and reload, process and download a sample playable.

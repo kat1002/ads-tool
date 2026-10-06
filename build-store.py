@@ -1,9 +1,9 @@
-"""Build the Chrome Web Store package of Ads Tool (no self-update system).
+"""Build the Chrome Web Store package of Playable Batch (no self-update system).
 
 Run:  python build-store.py
-Reads manifest.json, ads-tool.html, ads-tool.js, jszip.min.js and icons/ from disk (the GitHub
+Reads manifest.json, playable-batch.html, playable-batch.js, jszip.min.js and icons/ from disk (the GitHub
 version, which keeps self-update), strips the update system, writes the folder store-build/ and the
-zip ads-tool-store.zip. Source files are not modified. Fails loudly if an anchor changed.
+zip playable-batch-store.zip. Source files are not modified. Fails loudly if an anchor changed.
 """
 import json
 import os
@@ -13,7 +13,7 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "store-build")
-OUT_ZIP = os.path.join(HERE, "ads-tool-store.zip")
+OUT_ZIP = os.path.join(HERE, "playable-batch-store.zip")
 
 
 def read(path):
@@ -45,7 +45,7 @@ def cut_between(text, start, end, new, label):
 
 
 BACKGROUND = """function openTool() {
-  chrome.tabs.create({ url: chrome.runtime.getURL("ads-tool.html") });
+  chrome.tabs.create({ url: chrome.runtime.getURL("playable-batch.html") });
 }
 
 chrome.action.onClicked.addListener(openTool);
@@ -80,7 +80,7 @@ def build_manifest():
 
 
 def build_js():
-    js = read("ads-tool.js")
+    js = read("playable-batch.js")
     # elements: keep only the version badge
     js = cut_between(js, '        versionBadge: $("versionBadge"),', "      };\n\n      const ICON_SIZE",
                      '        versionBadge: $("versionBadge")\n', "update elements")
@@ -95,7 +95,7 @@ def build_js():
 
 
 def build_html():
-    html = read("ads-tool.html")
+    html = read("playable-batch.html")
     html = cut_between(html, '      <div class="version-box">', "    </header>",
                        '      <div class="version-box">\n        <span id="versionBadge" class="badge ok"></span>\n      </div>\n', "version box and update banners")
     return html
@@ -111,8 +111,8 @@ def main():
     os.makedirs(OUT_DIR)
     write("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
     write("background.js", BACKGROUND)
-    write("ads-tool.html", html)
-    write("ads-tool.js", js)
+    write("playable-batch.html", html)
+    write("playable-batch.js", js)
     write("jszip.min.js", read("jszip.min.js"))
     icons_src = os.path.join(HERE, "icons")
     if not os.path.isdir(icons_src):
@@ -126,7 +126,7 @@ def main():
             for name in sorted(files):
                 full = os.path.join(root, name)
                 zf.write(full, os.path.relpath(full, OUT_DIR).replace(os.sep, "/"))
-    print(f"wrote store-build/ and ads-tool-store.zip (version {manifest['version']})")
+    print(f"wrote store-build/ and playable-batch-store.zip (version {manifest['version']})")
 
 
 if __name__ == "__main__":

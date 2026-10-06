@@ -293,8 +293,8 @@
       }
 
       // ---- link notes (persisted, grouped in categories) ----
-      const NOTES_KEY = "adsToolLinkNotesV2";
-      const NOTES_KEY_V1 = "adsToolLinkNotes";
+      const NOTES_KEY = "playableBatchLinkNotesV2";
+      const NOTES_KEY_V1 = "playableBatchLinkNotes";
       const DEFAULT_CAT = "Chung";
       const MAX_CAT_NAME = 40;
       let notesState = { version: 2, activeId: "", open: false, categories: [] };
@@ -339,8 +339,37 @@
         return notesState.categories.find((cat) => cat.id === notesState.activeId) || notesState.categories[0];
       }
 
+      // ---- one-time migration of storage written under the old product name ----
+      const LEGACY_STORAGE_KEYS = {
+        adsToolLinkNotesV2: "playableBatchLinkNotesV2",
+        adsToolLinkNotes: "playableBatchLinkNotes",
+        adsToolUpdateCheck: "playableBatchUpdateCheck",
+        adsToolReopenAfterUpdate: "playableBatchReopenAfterUpdate"
+      };
+      let legacyMigration = null;
+      function migrateLegacyStorage() {
+        if (!legacyMigration) {
+          legacyMigration = (async () => {
+            try {
+              const oldKeys = Object.keys(LEGACY_STORAGE_KEYS);
+              const stored = await chrome.storage.local.get(oldKeys.concat(Object.values(LEGACY_STORAGE_KEYS)));
+              for (const oldKey of oldKeys) {
+                if (stored[oldKey] === undefined) continue;
+                const newKey = LEGACY_STORAGE_KEYS[oldKey];
+                if (stored[newKey] === undefined) await chrome.storage.local.set({ [newKey]: stored[oldKey] });
+                await chrome.storage.local.remove(oldKey);
+              }
+            } catch (e) {
+              // best-effort: never block startup
+            }
+          })();
+        }
+        return legacyMigration;
+      }
+
       async function loadNotes() {
         try {
+          await migrateLegacyStorage();
           const stored = await chrome.storage.local.get([NOTES_KEY, NOTES_KEY_V1]);
           if (stored[NOTES_KEY]) {
             notesState = sanitizeState(stored[NOTES_KEY]);
@@ -807,7 +836,7 @@
           notesFeedback("Chưa có link nào để xuất.", "warn");
           return;
         }
-        downloadBlob(new Blob([lines.join("\n")], { type: "text/plain" }), "ads-tool-links.txt");
+        downloadBlob(new Blob([lines.join("\n")], { type: "text/plain" }), "playable-batch-links.txt");
       }
 
       // ---- "Từ ghi chú" picker inside the Add-links modal ----
@@ -994,16 +1023,17 @@
       }
 
       // ---- update check ----
-      const UPDATE_KEY = "adsToolUpdateCheck";
+      const UPDATE_KEY = "playableBatchUpdateCheck";
+      // GitHub repo is not renamed yet (old name redirects); change here when it is.
       const REPO = "kat1002/ads-tool";
       const CHECK_INTERVAL_MS = 6 * 3600 * 1000;
-      const IS_EXE = Boolean(window.ADS_TOOL_EXE);
-      const ASSET_NAME = IS_EXE ? "AdsTool.exe" : "ads-tool-extension.zip";
+      const IS_EXE = Boolean(window.PLAYABLE_BATCH_EXE);
+      const ASSET_NAME = IS_EXE ? "PlayableBatch.exe" : "playable-batch-extension.zip";
       const HELPER_BASE = "http://127.0.0.1:8765";
-      const ALLOWED_FILES = ["manifest.json", "background.js", "ads-tool.html", "ads-tool.js", "jszip.min.js", "install-updater.bat", "uninstall-updater.bat"];
+      const ALLOWED_FILES = ["manifest.json", "background.js", "playable-batch.html", "playable-batch.js", "jszip.min.js", "install-updater.bat", "uninstall-updater.bat"];
       const ICON_PATH_RE = /^icons\/[A-Za-z0-9_.-]+\.png$/;
       const UPDATER_PATH_RE = /^updater\/(host|install|uninstall)\.py$/;
-      const NATIVE_HOST = "com.kat1002.adstool.updater";
+      const NATIVE_HOST = "com.kat1002.playable_batch.updater";
       let nativeReady = false;
       let nativeState = "unknown"; // unknown | ready | missing | forbidden | error | unsupported
       let latestRelease = null;
@@ -1081,7 +1111,7 @@
         ZIP: "Gói cập nhật bị lỗi",
         MANIFEST: "Gói cập nhật không khớp phiên bản",
         WRITE: "Không ghi được file vào thư mục",
-        NOT_ADS_TOOL: "Thư mục cài đặt không phải Ads Tool, hãy chạy lại install-updater.bat",
+        NOT_PLAYABLE_BATCH: "Thư mục cài đặt không phải Playable Batch, hãy chạy lại install-updater.bat",
         ORIGIN: "Trình cập nhật không nhận extension này, hãy chạy lại install-updater.bat"
       };
 
@@ -1179,6 +1209,7 @@
         let cached = null;
         try {
           try {
+            await migrateLegacyStorage();
             const stored = await chrome.storage.local.get(UPDATE_KEY);
             cached = stored[UPDATE_KEY] || null;
           } catch (e) {
@@ -1211,14 +1242,59 @@
       // IndexedDB key/value store (holds the extension folder handle)
       function idbOpen() {
         return new Promise((resolve, reject) => {
-          const req = indexedDB.open("adsToolFs", 1);
+          const req = indexedDB.open("playableBatchFs", 1);
           req.onupgradeneeded = () => req.result.createObjectStore("kv");
           req.onsuccess = () => resolve(req.result);
           req.onerror = () => reject(req.error);
         });
       }
 
+      // Copy the folder handle saved under the old DB name (if any) into the new DB, then drop the old DB.
+      // Best-effort: if the handle cannot be copied the user simply links the folder again.
+      let legacyFsMigration = null;
+      function migrateLegacyFs() {
+        if (!legacyFsMigration) {
+          legacyFsMigration = (async () => {
+            try {
+              const old = await new Promise((resolve) => {
+                const req = indexedDB.open("adsToolFs");
+                req.onupgradeneeded = () => { req.transaction.abort(); }; // DB did not exist: do not create it
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+                req.onblocked = () => resolve(null);
+              });
+              if (!old) return;
+              let handle;
+              if (old.objectStoreNames.contains("kv")) {
+                handle = await new Promise((resolve) => {
+                  const req = old.transaction("kv", "readonly").objectStore("kv").get("extDir");
+                  req.onsuccess = () => resolve(req.result);
+                  req.onerror = () => resolve(undefined);
+                });
+              }
+              old.close();
+              if (handle) {
+                const db = await idbOpen();
+                await new Promise((resolve) => {
+                  const tx = db.transaction("kv", "readwrite");
+                  const g = tx.objectStore("kv").get("extDir");
+                  g.onsuccess = () => { if (!g.result) tx.objectStore("kv").put(handle, "extDir"); };
+                  tx.oncomplete = () => resolve();
+                  tx.onerror = () => resolve();
+                  tx.onabort = () => resolve();
+                });
+              }
+              indexedDB.deleteDatabase("adsToolFs");
+            } catch (e) {
+              // best-effort
+            }
+          })();
+        }
+        return legacyFsMigration;
+      }
+
       async function idbGet(key) {
+        await migrateLegacyFs();
         const db = await idbOpen();
         return new Promise((resolve, reject) => {
           const req = db.transaction("kv", "readonly").objectStore("kv").get(key);
@@ -1253,11 +1329,11 @@
         try {
           const manifestFile = await (await dir.getFileHandle("manifest.json")).getFile();
           const manifest = JSON.parse(await manifestFile.text());
-          if (manifest.name !== "Ads Tool" || manifest.version !== currentVersion()) throw new Error("mismatch");
+          if (manifest.name !== "Playable Batch" || manifest.version !== currentVersion()) throw new Error("mismatch");
         } catch (e) {
           await idbSet("extDir", null).catch(() => {});
           linkedDir = null;
-          throw new Error("Thư mục không đúng: cần thư mục chứa manifest.json của Ads Tool đang chạy");
+          throw new Error("Thư mục không đúng: cần thư mục chứa manifest.json của Playable Batch đang chạy");
         }
       }
 
@@ -1265,7 +1341,7 @@
         if (typeof window.showDirectoryPicker !== "function") {
           throw new Error(await pickerMissingMessage());
         }
-        const dir = await window.showDirectoryPicker({ id: "ads-tool", mode: "readwrite" });
+        const dir = await window.showDirectoryPicker({ id: "playable-batch", mode: "readwrite" });
         await verifyDir(dir);
         await idbSet("extDir", dir);
         linkedDir = dir;
@@ -1288,7 +1364,7 @@
         const manifestEntry = files.find((item) => item.path === "manifest.json");
         if (!manifestEntry) throw new Error("Gói cập nhật thiếu manifest.json");
         const manifest = JSON.parse(await manifestEntry.entry.async("string"));
-        if (manifest.name !== "Ads Tool" || manifest.version !== latest.version) {
+        if (manifest.name !== "Playable Batch" || manifest.version !== latest.version) {
           throw new Error("Gói cập nhật không khớp phiên bản");
         }
         const result = [];
@@ -1360,7 +1436,7 @@
             try {
               const res = await nativeCall({ cmd: "update", version: latest.version }, 120000);
               if (res && res.ok) {
-                await chrome.storage.local.set({ adsToolReopenAfterUpdate: latest.version });
+                await chrome.storage.local.set({ playableBatchReopenAfterUpdate: latest.version });
                 await chrome.storage.local.remove(UPDATE_KEY).catch(() => {});
                 elements.updateStatus.textContent = "Xong, đang khởi động lại…";
                 chrome.runtime.reload();
@@ -1400,7 +1476,7 @@
           const entries = await downloadAndValidate(latest);
           elements.updateStatus.textContent = "Đang ghi file…";
           await writeFiles(dir, entries);
-          await chrome.storage.local.set({ adsToolReopenAfterUpdate: latest.version });
+          await chrome.storage.local.set({ playableBatchReopenAfterUpdate: latest.version });
           await chrome.storage.local.remove(UPDATE_KEY).catch(() => {});
           elements.updateStatus.textContent = "Xong, đang khởi động lại…";
           chrome.runtime.reload();
@@ -3237,7 +3313,7 @@
 
       function buildBatchReport(mode, variantCount, outputs, failures) {
         return {
-          tool: "Ads Tool — Batch Variants + Store Fetch",
+          tool: "Playable Batch — Batch Variants + Store Fetch",
           generatedAt: new Date().toISOString(),
           mode,
           sourceCount: state.sources.length,

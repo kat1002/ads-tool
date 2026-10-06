@@ -1,16 +1,19 @@
+// GitHub repo is not renamed yet (old name redirects); change here when it is.
 const REPO = "kat1002/ads-tool";
-const UPDATE_KEY = "adsToolUpdateCheck";
-const ALARM = "adsToolUpdateAlarm";
-const ASSET_NAME = "ads-tool-extension.zip";
+const UPDATE_KEY = "playableBatchUpdateCheck";
+const ALARM = "playableBatchUpdateAlarm";
+const ASSET_NAME = "playable-batch-extension.zip";
 
 function openTool() {
-  chrome.tabs.create({ url: chrome.runtime.getURL("ads-tool.html") });
+  chrome.tabs.create({ url: chrome.runtime.getURL("playable-batch.html") });
 }
 
 async function reopenIfFlagged() {
-  const { adsToolReopenAfterUpdate: v } = await chrome.storage.local.get("adsToolReopenAfterUpdate");
+  // adsToolReopenAfterUpdate: flag name written by versions before the rename to Playable Batch.
+  const stored = await chrome.storage.local.get(["playableBatchReopenAfterUpdate", "adsToolReopenAfterUpdate"]);
+  const v = stored.playableBatchReopenAfterUpdate || stored.adsToolReopenAfterUpdate;
   if (!v) return;
-  await chrome.storage.local.remove("adsToolReopenAfterUpdate");
+  await chrome.storage.local.remove(["playableBatchReopenAfterUpdate", "adsToolReopenAfterUpdate"]);
   openTool();
 }
 

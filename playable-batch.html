@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ads Tool — Batch + Store Fetch</title>
+  <title>Playable Batch</title>
   <script src="jszip.min.js"></script>
   <style>
     :root {
@@ -272,13 +272,13 @@
   <div class="wrap">
     <header class="topbar">
       <div>
-        <h1>Ads Tool</h1>
+        <h1>Playable Batch</h1>
         <p>Làm theo 4 bước: chọn file → thêm link store → kiểm tra variant → xử lý và tải về.</p>
       </div>
       <div class="version-box">
         <span id="versionBadge" class="badge">v…</span>
         <button id="checkUpdateBtn" class="small" type="button">Kiểm tra</button>
-        <button id="linkDirBtn" class="small" type="button" title="Chọn thư mục chứa manifest.json của Ads Tool">Liên kết thư mục</button>
+        <button id="linkDirBtn" class="small" type="button" title="Chọn thư mục chứa manifest.json của Playable Batch">Liên kết thư mục</button>
         <button id="setupUpdaterBtn" class="small hidden" type="button" aria-expanded="false" aria-controls="updaterHelp" title="Cài một lần để nút Cập nhật tự ghi đè file">Cài tự cập nhật</button>
         <span id="updateStatus" class="hint"></span>
       </div>
@@ -286,7 +286,7 @@
         <div class="hint">
           <b>Cài tự cập nhật (một lần, không cần quyền admin):</b>
           <ol>
-            <li>Mở thư mục Ads Tool đang dùng (thư mục chứa <code>manifest.json</code>).</li>
+            <li>Mở thư mục Playable Batch đang dùng (thư mục chứa <code>manifest.json</code>).</li>
             <li>Cài Python 3 nếu máy chưa có (python.org/downloads).</li>
             <li>Bấm đúp <code>install-updater.bat</code>.</li>
             <li>Nếu được hỏi ID, dán ID bên dưới vào cửa sổ đó.</li>
@@ -305,9 +305,9 @@
         <div id="updateHelp" class="hint hidden">
           <p style="margin:0 0 4px">Cập nhật thủ công (hoặc bấm <b>Cài tự cập nhật</b> để lần sau chỉ cần một cú bấm):</p>
           <ol>
-            <li>Giải nén file zip vừa tải, đè lên thư mục Ads Tool cũ (thư mục chứa <code>manifest.json</code>).</li>
+            <li>Giải nén file zip vừa tải, đè lên thư mục Playable Batch cũ (thư mục chứa <code>manifest.json</code>).</li>
             <li>Mở <code>chrome://extensions</code> (Edge: <code>edge://extensions</code>, Brave: <code>brave://extensions</code>).</li>
-            <li>Bấm <b>Reload</b> ở Ads Tool.</li>
+            <li>Bấm <b>Reload</b> ở Playable Batch.</li>
           </ol>
         </div>
       </div>
@@ -494,6 +494,6 @@
   </section>
   <div id="notesMenu" class="notes-menu hidden" role="menu"></div>
 
-  <script src="ads-tool.js"></script>
+  <script src="playable-batch.js"></script>
 </body>
 </html>
