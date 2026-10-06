@@ -1,7 +1,9 @@
-"""Generate the exe-branch ads-tool.html from the extension files on main.
+"""Generate the exe-branch playable-batch.html from the extension files in a source ref.
 
-Run on the exe branch:  python build-exe-page.py
-Reads ads-tool.html, ads-tool.js, jszip.min.js and the version from `git show main:...`,
+Run on the exe branch:  python build-exe-page.py [ref]
+The ref is the first CLI argument, else $PLAYABLE_BATCH_SRC_REF, else `main`.
+Reads playable-batch.html, playable-batch.js (or ads-tool.* if the ref still has the old
+names), jszip.min.js and the version from `git show <ref>:...`,
 inlines the scripts, adds a chrome.storage shim (localStorage) and swaps the direct store
 fetch for calls to the local store-helper.py. Fails loudly if a main anchor changed.
 """
@@ -13,8 +15,19 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+SRC_REF = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("PLAYABLE_BATCH_SRC_REF")) or "main"
+
+
+def show_named(new, old):
+    """Return (name, text) of `new` in the source ref, falling back to the pre-rename file name."""
+    for name in (new, old):
+        if subprocess.run(["git", "cat-file", "-e", f"{SRC_REF}:{name}"], cwd=HERE, capture_output=True).returncode == 0:
+            return name, show(name)
+    sys.exit(f"neither {new} nor {old} exists in {SRC_REF}")
+
+
 def show(path):
-    out = subprocess.run(["git", "show", f"main:{path}"], cwd=HERE, capture_output=True, check=True).stdout
+    out = subprocess.run(["git", "show", f"{SRC_REF}:{path}"], cwd=HERE, capture_output=True, check=True).stdout
     return out.decode("utf-8").replace("\r\n", "\n")
 
 
@@ -35,9 +48,19 @@ def cut_between(text, start, end, new, label):
 
 
 SHIM = """(() => {
-  window.ADS_TOOL_EXE = true;
+  window.PLAYABLE_BATCH_EXE = true;
+  window.ADS_TOOL_EXE = true; // flag name read by sources from before the rename
   // exe build: emulate the extension APIs the page uses, backed by localStorage.
-  const PREFIX = "adsTool:";
+  const PREFIX = "playableBatch:";
+  // Move values saved by the pre-rename build ("adsTool:" prefix) so existing notes survive.
+  try {
+    for (const k of Object.keys(localStorage)) {
+      if (!k.startsWith("adsTool:")) continue;
+      const next = PREFIX + k.slice("adsTool:".length);
+      if (localStorage.getItem(next) === null) localStorage.setItem(next, localStorage.getItem(k));
+      localStorage.removeItem(k);
+    }
+  } catch (e) { /* ignore */ }
   const listeners = [];
   const local = {
     async get(keys) {
@@ -104,7 +127,7 @@ CHECK_HELPER = """      async function checkHelper() {
         } catch (error) {
           state.helperOnline = false;
           elements.helperDot.className = "helper-dot off";
-          elements.helperText.textContent = "helper chưa chạy — mở AdsTool.exe";
+          elements.helperText.textContent = "helper chưa chạy — mở PlayableBatch.exe";
         }
       }
 
@@ -115,15 +138,15 @@ NOTICE = """        await checkHelper();
         if (state.helperOnline) {
           elements.checkNotice.className = "hint warn hidden";
         } else {
-          elements.checkNotice.textContent = "Helper chưa chạy nên không lấy được tên và icon. Mở AdsTool.exe rồi bấm “Quay lại” → “Tiếp theo”, hoặc bấm “Xác nhận” và nhập tay ở bước 3.";
+          elements.checkNotice.textContent = "Helper chưa chạy nên không lấy được tên và icon. Mở PlayableBatch.exe rồi bấm “Quay lại” → “Tiếp theo”, hoặc bấm “Xác nhận” và nhập tay ở bước 3.";
           elements.checkNotice.className = "hint warn";
         }
 """
 
 
 def main():
-    html = show("ads-tool.html")
-    js = show("ads-tool.js")
+    html_name, html = show_named("playable-batch.html", "ads-tool.html")
+    js_name, js = show_named("playable-batch.js", "ads-tool.js")
     jszip = show("jszip.min.js")
     version = re.search(r'"version":\s*"([^"]+)"', show("manifest.json")).group(1)
     if "</script>" in js or "</script>" in jszip:
@@ -151,11 +174,15 @@ def main():
     html = replace_once(html, '  <script src="jszip.min.js"></script>', "  <script>\n" + jszip.rstrip("\n") + "\n  </script>", "jszip tag")
     html = replace_once(html, "\n    .layout {", "\n" + CSS + "\n    .layout {", "css anchor")
     html = replace_once(html, "    </header>\n", STATUS + "    </header>\n", "header end")
-    html = replace_once(html, '  <script src="ads-tool.js"></script>',
+    tag = next((t for t in (f'  <script src="{js_name}"></script>', '  <script src="ads-tool.js"></script>',
+                            '  <script src="playable-batch.js"></script>') if t in html), None)
+    if tag is None:
+        sys.exit("app script tag not found in the source html")
+    html = replace_once(html, tag,
                         "  <script>\n" + SHIM.replace("__VERSION__", version) + "\n" + js.rstrip("\n") + "\n  </script>", "app tag")
-    with open(os.path.join(HERE, "ads-tool.html"), "w", encoding="utf-8", newline="\n") as fh:
+    with open(os.path.join(HERE, "playable-batch.html"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(html)
-    print(f"wrote ads-tool.html (version {version}, {len(html)} bytes)")
+    print(f"wrote playable-batch.html (from {SRC_REF}, version {version}, {len(html)} bytes)")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Local helper for ads-tool.html: fetches app name + icon from Google Play / App Store.
+"""Local helper for playable-batch.html: fetches app name + icon from Google Play / App Store.
 
 Run:  python store-helper.py     (opens Edge in app mode; closing the window stops the helper)
 Python 3 stdlib only. Binds to localhost.
@@ -17,16 +17,17 @@ import urllib.request
 import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0.7"
+VERSION = "1.1.0"
 PORT = 8765
 REPO = "kat1002/ads-tool"
-EXE_NAME = "AdsTool.exe"
+EXE_NAME = "PlayableBatch.exe"
+LEGACY_EXE_NAME = "AdsTool.exe"  # release asset name used before the rename
 if getattr(sys, "frozen", False):
-    ROOT = sys._MEIPASS  # PyInstaller unpack dir holding the bundled ads-tool.html
+    ROOT = sys._MEIPASS  # PyInstaller unpack dir holding the bundled playable-batch.html
 else:
     ROOT = os.path.dirname(os.path.abspath(__file__))
 LAST_PING = [time.time()]
-URL = f"http://127.0.0.1:{PORT}/ads-tool.html"
+URL = f"http://127.0.0.1:{PORT}/playable-batch.html"
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 IMAGE_HOSTS = (".googleusercontent.com", ".mzstatic.com")
@@ -105,18 +106,19 @@ def version_tuple(text):
 def self_update():
     """Download the latest release exe and swap it in place of the running one."""
     if not getattr(sys, "frozen", False):
-        raise ValueError("chỉ cập nhật được khi chạy bản AdsTool.exe")
+        raise ValueError("chỉ cập nhật được khi chạy bản PlayableBatch.exe")
     release = json.loads(http_get(f"https://api.github.com/repos/{REPO}/releases/latest")[0])
     latest = str(release.get("tag_name", ""))
     if version_tuple(latest) <= version_tuple(VERSION):
         raise ValueError("đã là bản mới nhất")
-    asset = next((a for a in release.get("assets") or [] if a.get("name") == EXE_NAME), None)
+    assets = release.get("assets") or []
+    asset = next((a for name in (EXE_NAME, LEGACY_EXE_NAME) for a in assets if a.get("name") == name), None)
     if not asset or not asset.get("browser_download_url"):
         raise ValueError(f"release không có {EXE_NAME}")
     exe = sys.executable
     folder = os.path.dirname(exe)
-    new_path = os.path.join(folder, "AdsTool.new.exe")
-    old_path = os.path.join(folder, "AdsTool.old.exe")
+    new_path = os.path.join(folder, "PlayableBatch.new.exe")
+    old_path = os.path.join(folder, "PlayableBatch.old.exe")
     try:
         data = http_get(asset["browser_download_url"], timeout=300)[0]
         if not data.startswith(b"MZ") or len(data) < 1_000_000:
@@ -245,7 +247,11 @@ def open_app_window():
     edge = find_edge()
     if not edge:
         return None
-    profile = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "AdsTool", "edge-profile")
+    base = os.environ.get("LOCALAPPDATA", ROOT)
+    profile = os.path.join(base, "PlayableBatch", "edge-profile")
+    legacy = os.path.join(base, "AdsTool", "edge-profile")  # keep notes saved before the rename
+    if not os.path.isdir(profile) and os.path.isdir(legacy):
+        profile = legacy
     return subprocess.Popen([edge, f"--app={URL}", f"--user-data-dir={profile}",
                              "--no-first-run", "--no-default-browser-check", "--window-size=1400,900"])
 
@@ -253,7 +259,7 @@ def open_app_window():
 def cleanup_old_exe():
     if not getattr(sys, "frozen", False):
         return
-    old_path = os.path.join(os.path.dirname(sys.executable), "AdsTool.old.exe")
+    old_path = os.path.join(os.path.dirname(sys.executable), "PlayableBatch.old.exe")
     for _ in range(60):  # the old bootloader process keeps the file locked until it exits
         try:
             if os.path.exists(old_path):
