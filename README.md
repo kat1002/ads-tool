@@ -3,7 +3,12 @@
 Công cụ làm hàng loạt cho playable ads: tự lấy tên app và icon từ Google Play / App Store, đổi tên file và xuất ra file ZIP.
 Chạy trên Windows, Mac và Linux, trong Chrome, Edge hoặc Brave.
 
-**Tải về: https://github.com/kat1002/ads-tool/releases/latest**
+**Cài từ cửa hàng:**
+
+- <img src="https://cdn.simpleicons.org/googlechrome/4285F4" width="16" height="16" alt="Chrome"> [Chrome Web Store](https://chromewebstore.google.com/detail/playable-batch/echlnncdahljkmddikbnjhicjhkngkbm)
+- <img src="https://cdn.simpleicons.org/microsoftedge/0078D7" width="16" height="16" alt="Edge"> [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/playable-batch/indjjekndihbefaedclbdjnljdjibcji)
+
+**Hoặc tải về: [Latest release](https://github.com/kat1002/ads-tool/releases/latest)**
 
 | File | Dùng cho |
 |---|---|
